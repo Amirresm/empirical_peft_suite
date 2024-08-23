@@ -8,8 +8,15 @@ from advf_utils import (
 )
 import nltk  # Here to have a nice missing dependency error message early on
 import numpy as np
-from datasets import load_dataset
 
+from suite.adapter_utils import init_ah_adapter, init_ah_advfusion, load_ah_adapter
+from suite.init_utils import (
+    get_training_corpus,
+    init_config,
+    init_model,
+    init_tokenizer,
+    train_tokenizer,
+)
 import torch
 import adapters
 import evaluate
@@ -119,13 +126,6 @@ summarization_name_mapping = {
 
 def ensure_path_exists(path):
     pathlib.Path(path).mkdir(parents=True, exist_ok=True)
-
-
-def get_training_corpus(raw_datasets, cols, step):
-    dataset = raw_datasets
-    for start_idx in range(0, len(dataset), step):
-        samples = dataset[start_idx : start_idx + step]
-        yield "\n".join([samples[col] for col in cols])
 
 
 def create_llama_prompt(
@@ -289,165 +289,69 @@ def main():
 
     [h.flush() for h in logger.handlers]
 
-    config = AutoConfig.from_pretrained(
-        (
-            model_args.config_name
-            if model_args.config_name
-            else model_args.model_name_or_path
-        ),
+    config = init_config(
+        config_name=model_args.config_name,
+        model_name_or_path=model_args.model_name_or_path,
         cache_dir=model_args.cache_dir,
-        revision=model_args.model_revision,
-        use_auth_token=True if model_args.use_auth_token else None,
     )
-    tokenizer = AutoTokenizer.from_pretrained(
-        (
-            model_args.tokenizer_name_or_path
-            if model_args.tokenizer_name_or_path
-            and os.path.isdir(model_args.tokenizer_name_or_path)
-            else model_args.model_name_or_path
-        ),
+
+    tokenizer = init_tokenizer(
+        tokenizer_name_or_path=model_args.tokenizer_name_or_path,
+        model_name_or_path=model_args.model_name_or_path,
+        use_fast_tokenizer=model_args.use_fast_tokenizer,
         cache_dir=model_args.cache_dir,
-        use_fast=model_args.use_fast_tokenizer,
-        revision=model_args.model_revision,
-        use_auth_token=True if model_args.use_auth_token else None,
     )
-    if (
-        model_args.train_tokenizer
-        and model_args.use_fast_tokenizer
-        and hasattr(tokenizer, "train_new_from_iterator")
-        and callable(tokenizer.train_new_from_iterator)
-    ):
+
+    if model_args.train_tokenizer and model_args.use_fast_tokenizer:
         logger.info("Training tokenizer...")
         training_corpus = get_training_corpus(
             raw_datasets["train"],
             [data_args.text_column, data_args.summary_column],
             1000,
         )
-        tokenizer = tokenizer.train_new_from_iterator(training_corpus)
+        tokenizer = train_tokenizer(tokenizer, training_corpus)
 
-    bnb_config = None
-    model_dtype = None
-    if model_args.quantization_mode == "4bit":
-        logger.info("Quantizing model to 4-bit")
-        model_dtype = torch.bfloat16
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_use_double_quant=True,
-            bnb_4bit_compute_dtype=model_dtype,
-        )
-    elif model_args.quantization_mode == "8bit":
-        logger.info("Quantizing model to 8-bit")
-        model_dtype = None
-        bnb_config = BitsAndBytesConfig(
-            load_in_8bit=True,
-        )
-
-    ModelClass = AutoModelForSeq2SeqLM
-    # TODO: uncomment
-    # if is_decoder_only:
-    #     ModelClass = AutoModelForCausalLM
-
-    model = ModelClass.from_pretrained(
-        model_args.model_name_or_path,
-        config=config,
+    model, model_dtype = init_model(
+        model_name_or_path=model_args.model_name_or_path,
+        model_config=config,
         cache_dir=model_args.cache_dir,
-        revision=model_args.model_revision,
-        use_auth_token=True if model_args.use_auth_token else None,
-        quantization_config=bnb_config,
-        # device_map="auto" if is_decoder_only else None,
-        device_map="auto",
-        torch_dtype=model_dtype,
+        quantization_mode=model_args.quantization_mode,
+        is_decoder_only=is_decoder_only,
     )
-    if is_decoder_only:
-        model.config.use_cache = False
 
     # Convert the model into an adapter model
     if adapter_args.train_adapter:
-        if adapter_args.adapter_config == "advfusion":
-            # TODO:
-            # train separate adapters (how many?)
-            # load trained adapters
-            # freeze one adapter
-            # train fusion
-            # unfreeze that adapter
-            # train fusion
-            adapters.init(model)
-            fusion_adapter_names = []
-            for path in advadp_path_list:
-                name = path.split("-")[-1]
-                if os.path.isdir(path):
-                    fusion_adapter_names.append(name)
-                    logger.info(f"Loading frozen adapter: {name}")
-                    model.load_adapter(path, load_as=name, set_active=True)
-                    freeze_adapter(model, name)
-                    if advfusion_args.advfusion_target in path:
-                        logger.info(f"Zeroing adapter: {name}")
-                        advfusion_args.target_adapter_path = path
-                        advfusion_args.target_adapter_name = name
-                    model.adapter_to(
-                        name, device=model.device, dtype=model_dtype
-                    )
-                else:
-                    logger.info(f"Invalid adapter path: {path}")
-
-            fusion_setup = Fuse(*fusion_adapter_names)
-            advfusion_args.fusion_name = fusion_setup
-            model.add_adapter_fusion(fusion_setup, set_active=True)
-            model.adapter_fusion_to(
-                fusion_setup, device=model.device, dtype=model_dtype
-            )
-            model.train_adapter_fusion(fusion_setup)
-
-        else:
-            adapters.init(model)
-            adapter_name = f"{model_args.config_title}_adapter"
-            config = (
-                CompacterConfig(
-                    phm_dim=64,
-                    phm_rank=32,
-                    mh_adapter=True,
-                    output_adapter=True,
-                )
-                if adapter_args.adapter_config == "compacter"
-                else (
-                    IA3Config()
-                    if adapter_args.adapter_config == "ia3"
-                    else (
-                        LoRAConfig(
-                            r=64,
-                            alpha=32,
-                            dropout=0.1,
-                            attn_matrices=["q", "k", "v"],
-                        )
-                        if adapter_args.adapter_config == "lora"
-                        else (
-                            SeqBnConfig()
-                            if adapter_args.adapter_config == "pfeiffer"
-                            else None
-                        )
+        match adapter_args.adapter_config:
+            case "advfusion":
+                (target_adapter_path, target_adapter_name, fusion_name) = (
+                    init_ah_advfusion(
+                        advadp_path_list=advadp_path_list,
+                        advfusion_target=advfusion_args.advfusion_target,
+                        model=model,
+                        model_dtype=model_dtype,
                     )
                 )
-            )
-            model.add_adapter(adapter_name, config=config)
-            model.adapter_to(
-                adapter_name, device=model.device, dtype=model_dtype
-            )
-            model.train_adapter(adapter_name)
-            if (
-                model_args.preload_adapter
-                and model_args.adapter_path
-                and os.path.isdir(model_args.adapter_path)
-            ):
-                model.load_adapter(
-                    model_args.adapter_path,
-                    load_as=adapter_name,
-                    set_active=True,
-                )
+                advfusion_args.target_adapter_path = target_adapter_path
+                advfusion_args.target_adapter_name = target_adapter_name
+                advfusion_args.fusion_name = fusion_name
 
-    if adapter_args.train_adapter:
+            case _:
+                adapter_name = init_ah_adapter(
+                        adapter_config=adapter_args.adapter_config,
+                        config_title=model_args.config_title,
+                        model=model,
+                        model_dtype=model_dtype
+                        )
+                if model_args.preload_adapter:
+                    load_ah_adapter(
+                            adapter_path=model_args.adapter_path,
+                            adapter_name=adapter_name,
+                            set_active=True
+                            )
         # logger.info(f"Active heads: {model.active_head()}")
         logger.info(f"Adapter Summary:\n{model.adapter_summary()}")
+
+
     logger.info(f"Model architucture:\n{model}")
 
     if is_decoder_only and not tokenizer.pad_token:
