@@ -1,7 +1,8 @@
 import os
+from general_utits import ensure_path_exists
 from logging_utils import logger
 import adapters
-from suite.advf_utils import freeze_adapter
+from advf_utils import freeze_adapter
 
 
 def get_ah_config(adapter_config):
@@ -40,7 +41,7 @@ def init_ah_advfusion(
 ):
     target_adapter_path = None
     target_adapter_name = None
-    
+
     adapters.init(model)
     fusion_adapter_names = []
     for path in advadp_path_list:
@@ -60,9 +61,7 @@ def init_ah_advfusion(
 
     fusion_name = adapters.composition.Fuse(*fusion_adapter_names)
     model.add_adapter_fusion(fusion_name, set_active=True)
-    model.adapter_fusion_to(
-        fusion_name, device=model.device, dtype=model_dtype
-    )
+    model.adapter_fusion_to(fusion_name, device=model.device, dtype=model_dtype)
     model.train_adapter_fusion(fusion_name)
 
     return target_adapter_path, target_adapter_name, fusion_name
@@ -86,3 +85,13 @@ def load_ah_adapter(adapter_path, adapter_name, model, set_active=True):
             load_as=adapter_name,
             set_active=set_active,
         )
+
+
+def save_ah_adapter(adapter_path, adapter_config, adapter_name, model):
+    ensure_path_exists(adapter_path)
+    if adapter_config == "advfusion":
+        model.save_adapter_fusion(adapter_path, adapter_name)
+        logger.info(f"Fusion {adapter_name} saved to {adapter_path}")
+    else:
+        model.save_adapter(adapter_path, adapter_name)
+        logger.info(f"Adapter {adapter_name} saved to {adapter_path}")

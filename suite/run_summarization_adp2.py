@@ -1,12 +1,30 @@
-import os
+import evaluate
+import torch
+from adapters import (
+    AdapterTrainer,
+    Seq2SeqAdapterTrainer,
+)
+from transformers import (
+    DataCollatorForLanguageModeling,
+    DataCollatorForSeq2Seq,
+    EarlyStoppingCallback,
+    Seq2SeqTrainer,
+    Trainer,
+    set_seed,
+)
 
+from adapter_utils import (
+    init_ah_adapter,
+    init_ah_advfusion,
+    load_ah_adapter,
+    save_ah_adapter,
+)
 from advf_utils import (
     unfreeze_reload_adapter,
     zero_freeze_adapter,
 )
-import numpy as np
-
-from adapter_utils import init_ah_adapter, init_ah_advfusion, load_ah_adapter
+from arg_utils import parse_arguments
+from constants import summarization_name_mapping
 from dataset_utils import (
     get_decoder_only_preprocessor,
     get_encoder_decoder_preprocessor,
@@ -19,13 +37,13 @@ from general_utits import (
     check_dependencies,
     check_nltk_data,
     check_version,
-    ensure_path_exists,
     handle_last_checkpoint,
 )
+from generation_utils import generation_from_predict
 from init_utils import (
+    ensure_decoder_only_padding_token,
     ensure_decoder_start_token,
     ensure_embedding_size,
-    ensure_decoder_only_padding_token,
     ensure_multilingual_tokenizer,
     get_training_corpus,
     init_config,
@@ -33,29 +51,8 @@ from init_utils import (
     init_tokenizer,
     train_tokenizer,
 )
-
-from constants import summarization_name_mapping
-
-import torch
-import evaluate
-from adapters import (
-    Seq2SeqAdapterTrainer,
-    AdapterTrainer,
-)
-from transformers import (
-    DataCollatorForSeq2Seq,
-    DataCollatorForLanguageModeling,
-    EarlyStoppingCallback,
-    Seq2SeqTrainer,
-    Trainer,
-    set_seed,
-)
-
-from bleu2.calc_bleu2 import calculate_bleu2
-
-from arg_utils import parse_arguments
 from logging_utils import logger, setup_logging
-from text_utils import clean_whitespaces_generations
+from train_utils import handle_metrics
 
 has_codebleu = False
 # try:
@@ -168,7 +165,7 @@ def main():
     if adapter_args.train_adapter:
         match adapter_args.adapter_config:
             case "advfusion":
-                (target_adapter_path, target_adapter_name, fusion_name) = (
+                (target_adapter_path, target_adapter_name, adapter_name) = (
                     init_ah_advfusion(
                         advadp_path_list=advadp_path_list,
                         advfusion_target=advfusion_args.advfusion_target,
@@ -178,7 +175,7 @@ def main():
                 )
                 advfusion_args.target_adapter_path = target_adapter_path
                 advfusion_args.target_adapter_name = target_adapter_name
-                advfusion_args.fusion_name = fusion_name
+                # advfusion_args.fusion_name = fusion_name
 
             case _:
                 adapter_name = init_ah_adapter(
@@ -433,7 +430,7 @@ def main():
         metric_rouge=metric_rouge,
         metric_bleu=metric_bleu,
         is_decoder_only=is_decoder_only,
-        meetric_path=data_args.metric_path,
+        metric_path=data_args.metric_path,
     )
 
     # Initialize our Trainer
@@ -472,7 +469,6 @@ def main():
         and train_dataset is not None
         and max_train_samples > 0
     ):
-        performance_metrics = {}
         checkpoint = None
         if training_args.resume_from_checkpoint is not None:
             checkpoint = training_args.resume_from_checkpoint
@@ -487,11 +483,12 @@ def main():
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
 
         if adapter_args.adapter_config == "advfusion":
-            metrics = train_result.metrics
-            metrics["train_samples"] = max_train_samples
-            trainer.log_metrics("train_before", metrics)
-            trainer.save_metrics("train_before", metrics)
-            trainer.save_state()
+            handle_metrics(
+                trainer=trainer,
+                prefix="train_before",
+                metrics=train_result.metrics,
+                sample_count=max_train_samples,
+            )
             unfreeze_reload_adapter(
                 model,
                 advfusion_args.target_adapter_path,
@@ -501,48 +498,45 @@ def main():
 
         elapsed = timer.stop()
         if elapsed is not None:
+            performance_metrics = {}
             performance_metrics.update({"total_gpu_time": elapsed})
-
-        trainer.save_model()
-        if adapter_name is not None and adapter_args.train_adapter:
-            ensure_path_exists(model_args.adapter_path)
-            if adapter_args.adapter_config == "advfusion":
-                model.save_adapter_fusion(
-                    model_args.adapter_path, advfusion_args.fusion_name
-                )
-                logger.info(
-                    f"Fusion {advfusion_args.fusion_name} saved to {model_args.adapter_path}"
-                )
-            else:
-                model.save_adapter(model_args.adapter_path, adapter_name)
-                logger.info(
-                    f"Adapter {adapter_name} saved to {model_args.adapter_path}"
-                )
-
-        metrics = train_result.metrics
-        metrics["train_samples"] = max_train_samples
-        if torch.cuda.is_available():
             peak_memory = (torch.cuda.max_memory_allocated() / 1024**2) / 1000
             performance_metrics.update({"peak_memory": peak_memory})
-            logger.info(f"Performance metrics: {performance_metrics}")
-            trainer.save_metrics("performance", performance_metrics)
+            handle_metrics(
+                trainer=trainer,
+                prefix="performance",
+                metrics=performance_metrics,
+            )
 
-        trainer.log_metrics("train", metrics)
-        trainer.save_metrics("train", metrics)
+        trainer.save_model()
+        handle_metrics(
+            trainer=trainer,
+            prefix="train",
+            metrics=train_result.metrics,
+            sample_count=max_train_samples,
+        )
+
+        if adapter_args.train_adapter:
+            save_ah_adapter(
+                adapter_path=model_args.adapter_path,
+                adapter_config=adapter_args.adapter_config,
+                adapter_name=adapter_name,
+                model=model,
+            )
+
         trainer.save_state()
 
     # Evaluation
-    results = {}
-    max_length = (
-        training_args.generation_max_length
-        if training_args.generation_max_length is not None
-        else data_args.val_max_target_length
-    )
-    num_beams = (
-        data_args.num_beams
-        if data_args.num_beams is not None
-        else training_args.generation_num_beams
-    )
+    # max_length = (
+    #     training_args.generation_max_length
+    #     if training_args.generation_max_length is not None
+    #     else data_args.val_max_target_length
+    # )
+    # num_beams = (
+    #     data_args.num_beams
+    #     if data_args.num_beams is not None
+    #     else training_args.generation_num_beams
+    # )
     if (
         trainer is not None
         and training_args.do_eval
@@ -559,10 +553,12 @@ def main():
                 # num_beams=num_beams,
             )
         )
-        metrics["eval_samples"] = min(max_eval_samples, len(eval_dataset))
-
-        trainer.log_metrics("eval", metrics)
-        trainer.save_metrics("eval", metrics)
+        handle_metrics(
+            trainer=trainer,
+            prefix="eval",
+            metrics=metrics,
+            sample_count=max_eval_samples,
+        )
 
     if (
         trainer is not None
@@ -581,86 +577,38 @@ def main():
             else trainer.predict(
                 predict_dataset,
                 metric_key_prefix="predict",
-                # max_length=max_length,
+                max_length=max_length,
                 # num_beams=num_beams,
             )
         )
 
-        metrics = predict_results.metrics or {}
-        metrics["predict_samples"] = min(max_predict_samples, len(predict_dataset))
-
-        trainer.log_metrics("predict", metrics)
-        trainer.save_metrics("predict", metrics)
+        handle_metrics(
+            trainer=trainer,
+            prefix="predict",
+            metrics=predict_results.metrics,
+            sample_count=max_predict_samples,
+        )
 
         labels = predict_results.label_ids
         preds = predict_results.predictions
+
         if labels is not None and preds is not None and trainer.is_world_process_zero():
             if training_args.predict_with_generate:
-                source = raw_datasets["test"].select(
-                    range(min(max_predict_samples, len(predict_dataset)))
+                generation_save_dir = (
+                    model_args.generation_output_path
+                    if model_args.generation_output_path is not None
+                    else training_args.output_dir
                 )
-                labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
-                preds = np.where(preds != -100, preds, tokenizer.pad_token_id)
 
-                raw_inputs = predict_dataset["input_ids"]
-                raw_inputs = np.where(
-                    raw_inputs != -100,
-                    raw_inputs,
-                    tokenizer.pad_token_id,
-                )
-                raw_labels = predict_dataset["labels"]
-                raw_labels = [
-                    [tokenizer.pad_token_id if t == -100 else t for t in rl]
-                    for rl in raw_labels
-                ]
-                raw_inputs = tokenizer.batch_decode(
-                    raw_inputs,
-                    skip_special_tokens=True,
-                )
-                raw_labels = tokenizer.batch_decode(
-                    raw_labels,
-                    skip_special_tokens=True,
-                )
-                labels = tokenizer.batch_decode(
-                    labels,
-                    skip_special_tokens=True,
-                )
-                preds = tokenizer.batch_decode(
-                    preds,
-                    skip_special_tokens=True,
-                )
-                pairs = [
-                    f"{index + 1}=========\n->Original Input:\n{or_inp}\n->Original Target:\n{or_tgt}\n->Reconstructed Target:\n{orig}\n->Reconstructed Predication:\n{pred}\n->Raw Input:\n{raw_input}\n->Raw Target:\n{raw_label}\n--\n"
-                    for pred, orig, or_inp, or_tgt, raw_input, raw_label, index in zip(
-                        preds,
-                        labels,
-                        source[data_args.text_column],
-                        source[data_args.summary_column],
-                        raw_inputs,
-                        raw_labels,
-                        range(len(preds)),
-                    )
-                ]
-                output_prediction_file = os.path.join(
-                    (
-                        model_args.generation_output_path
-                        if model_args.generation_output_path is not None
-                        else training_args.output_dir
-                    ),
-                    "generated_predictions.txt",
-                )
-                ensure_path_exists(
-                    (
-                        model_args.generation_output_path
-                        if model_args.generation_output_path is not None
-                        else training_args.output_dir
-                    )
-                )
-                with open(output_prediction_file, "w") as writer:
-                    writer.write("\n".join(pairs))
-
-                logger.info(
-                    f"{len(pairs)} predictions saved to {output_prediction_file}"
+                generation_from_predict(
+                    tokenizer=tokenizer,
+                    preds=preds,
+                    labels=labels,
+                    raw_dataset=raw_datasets["test"],
+                    tokenized_dataset=predict_dataset,
+                    text_column=text_column,
+                    summary_column=summary_column,
+                    save_path=generation_save_dir,
                 )
         # if trainer.is_world_process_zero():
         #     source = raw_datasets["test"].select(
@@ -674,30 +622,6 @@ def main():
         #         outputs = model.generate(inputs)
         #         outputs = tokenizer.decode(outputs[0])
         #         logger.info(f"Output: {outputs}")
-
-    kwargs = {
-        "finetuned_from": model_args.model_name_or_path,
-        "tasks": "summarization",
-    }
-    if data_args.dataset_name is not None:
-        kwargs["dataset_tags"] = data_args.dataset_name
-        if data_args.dataset_config_name is not None:
-            kwargs["dataset_args"] = data_args.dataset_config_name
-            kwargs["dataset"] = (
-                f"{data_args.dataset_name} {data_args.dataset_config_name}"
-            )
-        else:
-            kwargs["dataset"] = data_args.dataset_name
-
-    if data_args.lang is not None:
-        kwargs["language"] = data_args.lang
-
-    if training_args.push_to_hub:
-        trainer.push_to_hub(**kwargs)
-    else:
-        trainer.create_model_card(**kwargs)
-
-    return results
 
 
 def _mp_fn(index):
