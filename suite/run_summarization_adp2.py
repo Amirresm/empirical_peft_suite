@@ -5,17 +5,23 @@ from advf_utils import (
     zero_freeze_adapter,
 )
 import numpy as np
-import nltk
 
 from adapter_utils import init_ah_adapter, init_ah_advfusion, load_ah_adapter
 from dataset_utils import (
-    filter_dataset,
     get_decoder_only_preprocessor,
     get_encoder_decoder_preprocessor,
     get_generation_preprocessor,
     load_raw_datasets,
 )
-from general_utits import check_dependencies, check_nltk_data, check_version, handle_last_checkpoint
+from evaluation_utils import get_compute_metrics, preprocess_logits_for_metrics
+from general_utits import (
+    CudaTimer,
+    check_dependencies,
+    check_nltk_data,
+    check_version,
+    ensure_path_exists,
+    handle_last_checkpoint,
+)
 from init_utils import (
     ensure_decoder_start_token,
     ensure_embedding_size,
@@ -31,15 +37,11 @@ from init_utils import (
 from constants import summarization_name_mapping
 
 import torch
-import adapters
 import evaluate
-import transformers
 from adapters import (
     Seq2SeqAdapterTrainer,
     AdapterTrainer,
 )
-from adapters.composition import Fuse
-from filelock import FileLock
 from transformers import (
     DataCollatorForSeq2Seq,
     DataCollatorForLanguageModeling,
@@ -48,9 +50,6 @@ from transformers import (
     Trainer,
     set_seed,
 )
-from transformers.trainer_utils import get_last_checkpoint
-from transformers.utils import check_min_version, is_offline_mode
-from transformers.utils.versions import require_version
 
 from bleu2.calc_bleu2 import calculate_bleu2
 
@@ -68,7 +67,6 @@ has_codebleu = False
 check_dependencies()
 check_version()
 check_nltk_data()
-
 
 
 def main():
@@ -166,6 +164,7 @@ def main():
     )
 
     # Convert the model into an adapter model
+    adapter_name = None
     if adapter_args.train_adapter:
         match adapter_args.adapter_config:
             case "advfusion":
@@ -197,8 +196,6 @@ def main():
                     )
         # logger.info(f"Active heads: {model.active_head()}")
         logger.info(f"Adapter Summary:\n{model.adapter_summary()}")
-
-    logger.info(f"Model architucture:\n{model}")
 
     if is_decoder_only:
         ensure_decoder_only_padding_token(model=model, tokenizer=tokenizer)
@@ -278,6 +275,12 @@ def main():
 
     logger.info(f"Tokenizer pad token: {tokenizer.pad_token}")
 
+    logger.info(f"Model architucture:\n{model}")
+    logger.info(f"Model memory footprint:\n{model.get_memory_footprint()}")
+
+    tokenizer.save_pretrained(model_args.tokenizer_name_or_path)
+    logger.info(f"Tokenizer saved to {model_args.tokenizer_name_or_path}")
+
     preprocess_function = (
         get_decoder_only_preprocessor(
             tokenizer=tokenizer,
@@ -313,6 +316,8 @@ def main():
         ignore_pad_token_for_loss=data_args.ignore_pad_token_for_loss,
     )
 
+    max_train_samples = data_args.max_train_samples
+    train_dataset = None
     if training_args.do_train:
         if "train" not in raw_datasets:
             raise ValueError("--do_train requires a train dataset")
@@ -331,6 +336,8 @@ def main():
             )
             logger.info(f"train_dataset:\n{train_dataset}")
 
+    max_eval_samples = data_args.max_eval_samples
+    eval_dataset = None
     if training_args.do_eval:
         max_target_length = data_args.val_max_target_length
         if "validation" not in raw_datasets:
@@ -352,6 +359,8 @@ def main():
             )
             logger.info(f"eval_dataset:\n{eval_dataset}")
 
+    max_predict_samples = data_args.max_predict_samples
+    predict_dataset = None
     if training_args.do_predict:
         max_target_length = data_args.val_max_target_length
         if "test" not in raw_datasets:
@@ -381,9 +390,6 @@ def main():
             raise ValueError("Generation requires a test dataset")
         generation_dataset = raw_datasets["test"]
         if data_args.max_predict_samples is not None:
-            max_predict_samples = min(
-                len(generation_dataset), data_args.max_predict_samples
-            )
             generation_dataset = generation_dataset.select(range(max_predict_samples))
         with training_args.main_process_first(
             desc="generation dataset map pre-processing"
@@ -414,192 +420,75 @@ def main():
             pad_to_multiple_of=8 if training_args.fp16 else None,
         )
     )
-
+    metric_bleu = None
     if data_args.metric_path is not None:
         metric_bleu = evaluate.load(path=data_args.metric_path)
+    metric_rouge = None
     if data_args.metric_path_alt is not None:
         metric_rouge = evaluate.load(path=data_args.metric_path_alt)
 
-    performance_metrics = {}
-
-    def postprocess_text(preds, labels):
-        if is_decoder_only:
-            new_preds = []
-            new_labels = []
-            for pred in preds:
-                splits = pred.split('"""')
-                if len(splits) == 3:
-                    new_preds.append(splits[2].strip())
-                else:
-                    new_preds.append(pred)
-
-            for label in labels:
-                splits = label.split('"""')
-                if len(splits) == 3:
-                    new_labels.append(splits[2].strip())
-                else:
-                    new_labels.append(label)
-
-            return new_preds, new_labels
-        else:
-            preds = [pred.strip() for pred in preds]
-            labels = [label.strip() for label in labels]
-
-            # rougeLSum expects newline after each sentence
-            preds = ["\n".join(nltk.sent_tokenize(pred)) for pred in preds]
-            labels = ["\n".join(nltk.sent_tokenize(label)) for label in labels]
-            return preds, labels
-
-    def compute_metrics(eval_preds):
-        preds, labels = eval_preds
-        if isinstance(preds, tuple):
-            preds = preds[0]
-
-        if data_args.ignore_pad_token_for_loss:
-            # Replace -100 in the labels as we can't decode them.
-            preds = np.where(preds != -100, preds, tokenizer.pad_token_id)
-        if data_args.ignore_pad_token_for_loss:
-            # Replace -100 in the labels as we can't decode them.
-            labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
-        inspect_preds = tokenizer.batch_decode(preds, skip_special_tokens=False)
-        inspect_labels = tokenizer.batch_decode(labels, skip_special_tokens=False)
-        decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
-        decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
-
-        logger.info(
-            f"\nCompute_metrics Preds example:\n{clean_whitespaces_generations(inspect_preds[0])}\n"
-        )
-        logger.info(
-            f"\nCompute_metrics Labels example:\n{clean_whitespaces_generations(inspect_labels[0])}\n\n"
-        )
-        decoded_preds, decoded_labels = postprocess_text(decoded_preds, decoded_labels)
-
-        result = metric_rouge.compute(
-            predictions=decoded_preds,
-            references=decoded_labels,
-            use_stemmer=True,
-        )
-        result = {f"ROUGE_{k}": round(v * 100, 4) for k, v in result.items()}
-        prediction_lens = [
-            np.count_nonzero(pred != tokenizer.pad_token_id) for pred in preds
-        ]
-        result["gen_len"] = np.mean(prediction_lens)
-
-        # CodeBERT bleu metric
-        bleu2, b2args = calculate_bleu2(decoded_preds, decoded_labels, smooth=True)
-        bleu2 = {
-            f"BLEU2_{k}": str(v) if isinstance(v, list) else v for k, v in bleu2.items()
-        }
-        result = {**result, **bleu2}
-        if data_args.metric_path is not None:
-            if any([len(decoded_pred) > 0 for decoded_pred in decoded_preds]) and any([
-                len(decoded_label) > 0 for decoded_label in decoded_labels
-            ]):
-                result_bleu = metric_bleu.compute(
-                    predictions=decoded_preds,
-                    references=decoded_labels,
-                    smooth=True,
-                )
-                result_bleu["bleuP"] = round(result_bleu["bleu"] * 100, 4)
-                result_bleu = {
-                    f"BLEU_{k}": str(v) if isinstance(v, list) else v
-                    for k, v in result_bleu.items()
-                }
-            else:
-                logger.info(
-                    f"Skipping BLEU computation as decoded_preds is empty: \n {decoded_preds[:20]} \n decoded_labels: \n {decoded_labels[:20]}"
-                )
-                result_bleu = {
-                    "BLEU_bleu": -1.0,
-                    "BLEU_bleuP": -1.0,
-                    "BLEU_brevity_penalty": -1.0,
-                    "BLEU_length_ratio": -1.0,
-                    "BLEU_precisions": -1.0,
-                    "BLEU_reference_length": -1.0,
-                    "BLEU_translation_length": -1.0,
-                }
-        if data_args.metric_path is not None:
-            result = {**result, **result_bleu}
-
-        if has_codebleu:
-            cb_results = calc_codebleu(
-                [[l] for l in decoded_labels], decoded_preds, lang="python"
-            )
-            cb_results["codebleuP"] = results["codebleu"] * 100
-            result = {**result, **cb_results}
-
-        return result
-
-    def preprocess_logits_for_metrics(logits, labels):
-        # logger.info(f"preprocess logits:\n{logits}\nlabels:\n{labels}\nend preprocess")
-        if isinstance(logits, tuple):
-            # Depending on the model and config, logits may contain extra tensors,
-            # like past_key_values, but logits always come first
-            logits = logits[0]
-        return logits.argmax(dim=-1)
-
-    # Early stopping
-    if data_args.patience and data_args.patience > 0:
-        training_args.load_best_model_at_end = True
-
-    logger.info(f"Model memory footprint:\n{model.get_memory_footprint()}")
-
-    tokenizer.save_pretrained(model_args.tokenizer_name_or_path)
-    logger.info(f"Tokenizer saved to {model_args.tokenizer_name_or_path}")
+    compute_metrics = get_compute_metrics(
+        tokenizer=tokenizer,
+        ignore_pad_token_for_loss=data_args.ignore_pad_token_for_loss,
+        metric_rouge=metric_rouge,
+        metric_bleu=metric_bleu,
+        is_decoder_only=is_decoder_only,
+        meetric_path=data_args.metric_path,
+    )
 
     # Initialize our Trainer
-    trainer: Trainer | None = None
-    if training_args.do_train:  # or training_args.do_eval:
+    trainer: Trainer | Seq2SeqTrainer | None = None
+    if training_args.do_train or training_args.do_eval:
         if adapter_args.train_adapter:
             trainer_class = AdapterTrainer if is_decoder_only else Seq2SeqAdapterTrainer
         else:
             trainer_class = Trainer if is_decoder_only else Seq2SeqTrainer
 
-        logger.info(
-            f"metric for choosing best model is {training_args.metric_for_best_model}"
-        )
         trainer = trainer_class(
             model=model,
             args=training_args,
-            train_dataset=train_dataset if training_args.do_train else None,
-            eval_dataset=eval_dataset if training_args.do_eval else None,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
             tokenizer=tokenizer,
             data_collator=data_collator,
             compute_metrics=compute_metrics,
-            # preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+            preprocess_logits_for_metrics=preprocess_logits_for_metrics
+            if is_decoder_only
+            else None,
         )
-        logger.info(f"PREDICT WITH GENERATE {training_args.predict_with_generate}")
+        # Early stopping
         if data_args.patience and data_args.patience > 0:
+            logger.info(
+                f"metric for choosing best model is {training_args.metric_for_best_model}"
+            )
             callback = EarlyStoppingCallback(early_stopping_patience=data_args.patience)
             trainer.add_callback(callback)
+            training_args.load_best_model_at_end = True
 
     # Training
-    max_train_samples = (
-        data_args.max_train_samples
-        if data_args.max_train_samples is not None
-        else len(train_dataset)
-    )
-    if training_args.do_train and max_train_samples > 0:
+    if (
+        trainer is not None
+        and training_args.do_train
+        and train_dataset is not None
+        and max_train_samples > 0
+    ):
+        performance_metrics = {}
         checkpoint = None
         if training_args.resume_from_checkpoint is not None:
             checkpoint = training_args.resume_from_checkpoint
         elif last_checkpoint is not None:
             checkpoint = last_checkpoint
 
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
-            start = torch.cuda.Event(enable_timing=True)
-            end = torch.cuda.Event(enable_timing=True)
-            start.record()
-
         if adapter_args.adapter_config == "advfusion":
             zero_freeze_adapter(model, advfusion_args.target_adapter_name, model_dtype)
 
+        timer = CudaTimer()
+        timer.start()
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
 
         if adapter_args.adapter_config == "advfusion":
             metrics = train_result.metrics
-            metrics["train_samples"] = min(max_train_samples, len(train_dataset))
+            metrics["train_samples"] = max_train_samples
             trainer.log_metrics("train_before", metrics)
             trainer.save_metrics("train_before", metrics)
             trainer.save_state()
@@ -610,14 +499,12 @@ def main():
             )
             train_result = trainer.train(resume_from_checkpoint=checkpoint)
 
-        if torch.cuda.is_available():
-            end.record()
-            torch.cuda.synchronize()  # wait for all_reduce to complete
-            total_time = start.elapsed_time(end) / (1000 * 60)
-            performance_metrics.update({"total_gpu_time": total_time})
+        elapsed = timer.stop()
+        if elapsed is not None:
+            performance_metrics.update({"total_gpu_time": elapsed})
 
         trainer.save_model()
-        if adapter_args.train_adapter:
+        if adapter_name is not None and adapter_args.train_adapter:
             ensure_path_exists(model_args.adapter_path)
             if adapter_args.adapter_config == "advfusion":
                 model.save_adapter_fusion(
@@ -633,7 +520,7 @@ def main():
                 )
 
         metrics = train_result.metrics
-        metrics["train_samples"] = min(max_train_samples, len(train_dataset))
+        metrics["train_samples"] = max_train_samples
         if torch.cuda.is_available():
             peak_memory = (torch.cuda.max_memory_allocated() / 1024**2) / 1000
             performance_metrics.update({"peak_memory": peak_memory})
@@ -656,19 +543,20 @@ def main():
         if data_args.num_beams is not None
         else training_args.generation_num_beams
     )
-    max_eval_samples = (
-        data_args.max_eval_samples
-        if data_args.max_eval_samples is not None
-        else len(eval_dataset)
-    )
-    if training_args.do_eval and max_eval_samples > 0:
+    if (
+        trainer is not None
+        and training_args.do_eval
+        and eval_dataset is not None
+        and max_eval_samples > 0
+    ):
         logger.info("*** Evaluate ***")
         metrics = (
             trainer.evaluate(metric_key_prefix="eval")
             if is_decoder_only
             else trainer.evaluate(
+                metric_key_prefix="eval",
                 max_length=max_length,
-                # num_beams=num_beams, metric_key_prefix="eval"
+                # num_beams=num_beams,
             )
         )
         metrics["eval_samples"] = min(max_eval_samples, len(eval_dataset))
@@ -676,7 +564,12 @@ def main():
         trainer.log_metrics("eval", metrics)
         trainer.save_metrics("eval", metrics)
 
-    if training_args.do_predict:
+    if (
+        trainer is not None
+        and training_args.do_predict
+        and predict_dataset is not None
+        and max_predict_samples > 0
+    ):
         logger.info("*** Predict ***")
 
         predict_results = (
@@ -693,24 +586,19 @@ def main():
             )
         )
 
-        metrics = predict_results.metrics
-        max_predict_samples = (
-            data_args.max_predict_samples
-            if data_args.max_predict_samples is not None
-            else len(predict_dataset)
-        )
+        metrics = predict_results.metrics or {}
         metrics["predict_samples"] = min(max_predict_samples, len(predict_dataset))
 
         trainer.log_metrics("predict", metrics)
         trainer.save_metrics("predict", metrics)
 
-        if trainer.is_world_process_zero():
+        labels = predict_results.label_ids
+        preds = predict_results.predictions
+        if labels is not None and preds is not None and trainer.is_world_process_zero():
             if training_args.predict_with_generate:
                 source = raw_datasets["test"].select(
                     range(min(max_predict_samples, len(predict_dataset)))
                 )
-                labels = predict_results.label_ids
-                preds = predict_results.predictions
                 labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
                 preds = np.where(preds != -100, preds, tokenizer.pad_token_id)
 

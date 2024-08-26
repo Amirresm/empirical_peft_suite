@@ -25,12 +25,14 @@ def check_dependencies():
     print("adapters: ", adapters.__version__)
     print("accelerate: ", accelerate.__version__)
 
+
 def check_version():
     check_min_version("4.26.0")
     require_version(
         "datasets>=1.8.0",
         "To fix: pip install -r examples/pytorch/summarization/requirements.txt",
     )
+
 
 def check_nltk_data():
     try:
@@ -95,3 +97,22 @@ def handle_last_checkpoint(output_dir, overwrite_output_dir, resume_from_checkpo
                 f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
                 "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
             )
+
+
+class CudaTimer:
+    def __init__(self):
+        if not torch.cuda.is_available():
+            logger.warning("CudaTimer: CUDA is not available")
+        else:
+            self.timer = torch.cuda.Event(enable_timing=True)
+
+    def start(self):
+        if torch.cuda.is_available():
+            self.timer.record()
+
+    def stop(self):
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+            self.timer.record()
+            return self.timer.elapsed_time() / (1000)
+        return None
