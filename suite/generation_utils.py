@@ -15,9 +15,7 @@ def generation_from_predict(
     summary_column,
     save_path,
 ):
-    source = raw_dataset.select(
-        len(tokenized_dataset),
-    )
+    source = raw_dataset.select(range(len(tokenized_dataset)))
     labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
     preds = np.where(preds != -100, preds, tokenizer.pad_token_id)
 

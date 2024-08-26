@@ -105,6 +105,7 @@ class CudaTimer:
             logger.warning("CudaTimer: CUDA is not available")
         else:
             self.timer = torch.cuda.Event(enable_timing=True)
+            self.end_timer = torch.cuda.Event(enable_timing=True)
 
     def start(self):
         if torch.cuda.is_available():
@@ -112,7 +113,8 @@ class CudaTimer:
 
     def stop(self):
         if torch.cuda.is_available():
+            self.end_timer.record()
             torch.cuda.synchronize()
-            self.timer.record()
-            return self.timer.elapsed_time() / (1000)
+            # self.timer.record()
+            return self.timer.elapsed_time(self.end_timer) / (1000)
         return None

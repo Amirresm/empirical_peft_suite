@@ -80,7 +80,7 @@ def main():
 
     advadp_path_list: list[str] = advfusion_args.advadp_path_list
 
-    setup_logging(logger, training_args.get_process_log_level)
+    setup_logging(logger, training_args.get_process_log_level())
 
     # Log on each process the small summary:
     logger.warning(
@@ -527,11 +527,11 @@ def main():
         trainer.save_state()
 
     # Evaluation
-    # max_length = (
-    #     training_args.generation_max_length
-    #     if training_args.generation_max_length is not None
-    #     else data_args.val_max_target_length
-    # )
+    max_length = (
+        training_args.generation_max_length
+        if training_args.generation_max_length is not None
+        else data_args.val_max_target_length
+    )
     # num_beams = (
     #     data_args.num_beams
     #     if data_args.num_beams is not None
