@@ -1,4 +1,6 @@
 import os
+
+from constants import MULTILINGUAL_TOKENIZERS
 from logging_utils import logger
 
 import torch
@@ -7,6 +9,8 @@ from transformers import (
     AutoModelForSeq2SeqLM,
     AutoTokenizer,
     BitsAndBytesConfig,
+    MBartTokenizerFast,
+    MBartTokenizer,
 )
 
 
@@ -108,3 +112,74 @@ def init_model(
         model_dtype = model.dtype
 
     return model, model_dtype
+
+
+def ensure_decoder_only_padding_token(model, tokenizer):
+    if not tokenizer.pad_token:
+        tokenizer.pad_token = (
+            tokenizer.bos_token
+        )  # https://github.com/huggingface/transformers/issues/22794
+        tokenizer.padding_side = "left"
+        model.config.pad_token_id = tokenizer.pad_token_id
+        assert (
+            model.config.pad_token_id == tokenizer.pad_token_id
+        ), "The model's pad token ID does not match the tokenizer's pad token ID!"
+
+
+def ensure_decoder_start_token(model, tokenizer, target_lang):
+    if model.config.decoder_start_token_id is None and isinstance(
+        tokenizer, (MBartTokenizer, MBartTokenizerFast)
+    ):
+        if isinstance(tokenizer, MBartTokenizer):
+            model.config.decoder_start_token_id = tokenizer.lang_code_to_id[target_lang]
+        else:
+            model.config.decoder_start_token_id = tokenizer.convert_tokens_to_ids(
+                target_lang
+            )
+
+    if model.config.decoder_start_token_id is None:
+        # raise ValueError(
+        #     "Make sure that `config.decoder_start_token_id` is correctly defined"
+        # )
+        logger.warning("No decoder_start_token_id found in config")
+        # model.config.decoder_start_token_id = model.config.eos_token_id
+
+
+def ensure_embedding_size(model, tokenizer, max_source_length):
+    if (
+        hasattr(model.config, "max_position_embeddings")
+        and model.config.max_position_embeddings < max_source_length
+    ):
+        logger.warning(
+            "Increasing the model's number of position embedding vectors from"
+            f" {model.config.max_position_embeddings} to {max_source_length}."
+        )
+        logger.warning(
+            f"`--max_source_length` is set to {max_source_length}, but the model only has"
+            f" {model.config.max_position_embeddings} position encodings. Consider either reducing"
+            f" `--max_source_length` to {model.config.max_position_embeddings} or to automatically resize the"
+            " model's position encodings by passing `--resize_position_embeddings`."
+        )
+        model.resize_position_embeddings(max_source_length)
+    embedding_size = model.get_input_embeddings().weight.shape[0]
+    if len(tokenizer) > embedding_size:
+        model.resize_token_embeddings(len(tokenizer))
+
+
+def ensure_multilingual_tokenizer(model, tokenizer, target_lang, forced_bos_token=None):
+    if isinstance(tokenizer, tuple(MULTILINGUAL_TOKENIZERS)):
+        assert (
+            target_lang is not None
+        ), f"{tokenizer.__class__.__name__} is a multilingual tokenizer which requires --lang argument"
+
+        tokenizer.src_lang = target_lang
+        tokenizer.tgt_lang = target_lang
+
+        # For multilingual translation models like mBART-50 and M2M100 we need to force the target language token
+        # as the first generated token. We ask the user to explicitly provide this as --forced_bos_token argument.
+        forced_bos_token_id = (
+            tokenizer.lang_code_to_id[forced_bos_token]
+            if forced_bos_token is not None
+            else None
+        )
+        model.config.forced_bos_token_id = forced_bos_token_id
