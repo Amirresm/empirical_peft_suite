@@ -225,6 +225,9 @@ def get_decoder_only_preprocessor(
                 idx_split = find_nth(input, '"""', 2) + 3
                 prompt = input[:idx_split]
                 completion = input[idx_split:]
+
+                if target is not None:
+                    input = f"# code:\n{input}\n# summarize:\n{target}"
                 sample = create_llama_prompt(
                     input, is_training=True, eos_token=tokenizer.eos_token
                 )
