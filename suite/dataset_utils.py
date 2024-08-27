@@ -222,9 +222,6 @@ def get_decoder_only_preprocessor(
                     target = " ".join(target)
 
                 # input = 'def '.join(input.split('def ')[:2])
-                idx_split = find_nth(input, '"""', 2) + 3
-                prompt = input[:idx_split]
-                completion = input[idx_split:]
 
                 if target is not None:
                     input = f"# code:\n{input}\n# summarize:\n{target}"

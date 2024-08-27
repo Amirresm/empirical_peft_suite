@@ -122,6 +122,14 @@ def main():
 
     set_seed(training_args.seed)
     is_decoder_only = "llama" in model_args.model_name_or_path.lower()
+    is_gen_job = (
+        data_args.train_file is not None
+        and "spp" in data_args.train_file.lower()
+        or data_args.test_file is not None
+        and "spp" in data_args.test_file.lower()
+        or data_args.validation_file is not None
+        and "spp" in data_args.validation_file.lower()
+    )
 
     raw_datasets = load_raw_datasets(
         data_args.dataset_name,
@@ -731,6 +739,7 @@ def main():
                     tokenizer=tokenizer,
                     raw_dataset=raw_datasets["test"],
                     text_column=text_column,
+                    summary_column=summary_column,
                     max_predict_samples=data_args.max_predict_samples,
                     max_source_length=data_args.max_source_length,
                     max_new_tokens=model_args.max_new_tokens,
@@ -742,7 +751,7 @@ def main():
                 )
 
             num_samples_per_task = data_args.humaneval_num
-            if num_samples_per_task > 0:
+            if is_gen_job and num_samples_per_task > 0:
                 run_humaneval(
                     model=model,
                     tokenizer=tokenizer,

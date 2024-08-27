@@ -7,7 +7,13 @@ from codeeval.core import run_eval
 from evaluation_utils import calc_all_metrics
 from general_utits import ensure_path_exists
 from logging_utils import logger
-from text_utils import clean_whitespaces_generations, create_llama_prompt, fix_indents, spp_split
+from text_utils import (
+    clean_whitespaces_generations,
+    create_llama_prompt,
+    csn_split,
+    fix_indents,
+    spp_split,
+)
 
 
 def generation_from_predict_encoder_decoder(
@@ -78,6 +84,7 @@ def generation_decoder_only(
     tokenizer,
     raw_dataset,
     text_column,
+    summary_column,
     max_predict_samples,
     max_source_length,
     max_new_tokens,
@@ -88,23 +95,25 @@ def generation_decoder_only(
     metric_path,
 ):
     samples = raw_dataset.select(range(max_predict_samples))
-    expected = []
     prompts = []
-    descs = []
     targets = []
     for i, sample in enumerate(samples):
         input = sample[text_column]
-        target = sample[text_column]
-        input = '"""'.join(input.split('"""')[:2]) + '"""\n'
-        sample = create_llama_prompt(
-            input, is_training=False, eos_token=tokenizer.eos_token
+        target = (
+            sample[text_column] if summary_column == "NONE" else sample[summary_column]
         )
-        expect = create_llama_prompt(
-            target, is_training=False, eos_token=tokenizer.eos_token
-        )
-        prompts.append(sample)
-        expected.append(expect)
-        descs.append(input)
+        if isinstance(input, list):
+            input = " ".join(input)
+        if isinstance(target, list):
+            target = " ".join(target)
+
+        if summary_column == "NONE":
+            input, target = spp_split(input)
+        else:
+            input = f"# code:\n{input}\n# summarize:\n"
+            target = target
+
+        prompts.append(input)
         targets.append(target)
 
     outputs = []
@@ -142,45 +151,21 @@ def generation_decoder_only(
                     f"{index + i}===\nInput:\n{prompts[index + i]}\nPred:\n{bo}\nGold:\n{targets[index + i]}"
                 )
 
-    # logger.info("Cleaning outputs...")
-    # outputs = list(map(clean_whitespaces_generations, outputs))
-
-    # logger.info("Extracting code predictions...")
-    # pred_codes = []
-    # for output in outputs:
-    #     # pred_code = output.split("[/INST] CODE:")[1].strip()
-    #     pred_code = output.strip()
-    #     try:
-    #         pred_code = output.split("[/INST]")[1].strip()
-    #     except:
-    #         pass
-    #     pred_codes.append(pred_code)
-    # logger.info(f"Lenghts: outputs={len(outputs)} expecteds={len(expected)}")
-    # pairs = [
-    #     f"{index + 1}=========\n->Pred Code:\n{pcode}\n->Target Code:\n{tcode}\n->Instruction:\n{tdesc}\n->Reconstructed Predication:\n{pred}\n->Raw Input:\n{raw_input}\n--\n\n"
-    #     for pcode, tcode, tdesc, pred, raw_input, index in zip(
-    #         pred_codes,
-    #         targets,
-    #         descs,
-    #         outputs,
-    #         expected,
-    #         range(len(outputs)),
-    #     )
-    # ]
-    in_prompts, out_prompts, in_completions, out_completions = (
-        process_decoder_only_generation(targets, outputs)
-    )
+    preds = process_decoder_only_generation(prompts, outputs)
     pairs = [
-        f"{index + 1}=========\n->Gold input:\n{sample}\n->Gold prompt:\n{in_prompt}\n->Gold completion:\n{in_completion}\n\
-                    ->Pred output:\n{output}\n->Pred prompt:\n{out_prompt}\n->Pred completion:\n{out_completion}\n\
-                    ->In TCount: {token_count[0]}\n->Out TCount: {token_count[1]}\n Total TCount: {token_count[0] + token_count[1]}\n--\n\n"
-        for sample, output, in_prompt, in_completion, out_prompt, out_completion, token_count, index in zip(
+        f"{index + 1}=========\n\
+->Prompt:\n{prompt}\n\
+->Target:\n{target}\n\
+->Pred:\n{pred}\n\
+->Output:\n{output}\n\
+->In TCount: {token_count[0]}\n\
+->Out TCount: {token_count[1]}\n\
+--\n\n"
+        for prompt, target, pred, output, token_count, index in zip(
+            prompts,
             targets,
+            preds,
             outputs,
-            in_prompts,
-            in_completions,
-            out_prompts,
-            out_completions,
             token_counts,
             range(len(outputs)),
         )
@@ -203,8 +188,8 @@ def generation_decoder_only(
 
     logger.info(f"{len(pairs)} generations saved to {output_prediction_file}")
     results = calc_all_metrics(
-        out_completions,
-        in_completions,
+        preds,
+        targets,
         metric_rouge,
         metric_bleu,
         metric_path,
@@ -214,18 +199,20 @@ def generation_decoder_only(
 
 
 def process_decoder_only_generation(inputs, outputs):
-    in_prompts, out_prompts, in_completions, out_completions = [], [], [], []
+    preds = []
     for i in range(len(outputs)):
         input = inputs[i]
         output = outputs[i]
-        in_prompt, in_completion = spp_split(input)
-        out_prompt, out_completion = spp_split(output)
-        in_prompts.append(in_prompt)
-        in_completions.append(in_completion)
-        out_prompts.append(out_prompt)
-        out_completions.append(out_completion)
 
-    return in_prompts, out_prompts, in_completions, out_completions
+        pred = output.split(input)
+        if len(pred) == 1:
+            pred = ""
+        else:
+            pred = pred[1]
+        preds.append(pred)
+
+    return preds
+
 
 @torch.inference_mode()
 def generate_batch_completion(model, tokenizer, prompt, batch_size) -> list[str]:
@@ -274,4 +261,3 @@ def run_humaneval(model, tokenizer, num_samples_per_task, output_dir):
             generate_batch_completion,
             True,
         )
-
