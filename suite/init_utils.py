@@ -6,6 +6,7 @@ from logging_utils import logger
 import torch
 from transformers import (
     AutoConfig,
+    AutoModelForCausalLM,
     AutoModelForSeq2SeqLM,
     AutoTokenizer,
     BitsAndBytesConfig,
@@ -58,7 +59,7 @@ def train_tokenizer(tokenizer, training_corpus):
     ):
         tokenizer = tokenizer.train_new_from_iterator(training_corpus)
     else:
-        logger.warn("Failed to train tokenizer: Tokenizer is not trainable")
+        logger.warning("Failed to train tokenizer: Tokenizer is not trainable")
 
     return tokenizer
 
@@ -90,8 +91,8 @@ def init_model(
 
     ModelClass = AutoModelForSeq2SeqLM
     # TODO: uncomment
-    # if is_decoder_only:
-    #     ModelClass = AutoModelForCausalLM
+    if is_decoder_only:
+        ModelClass = AutoModelForCausalLM
 
     model = ModelClass.from_pretrained(
         model_name_or_path,

@@ -42,7 +42,8 @@ def load_raw_datasets(
             # token=True if model_args.use_auth_token else None,
         )
 
-        if raw_datasets is DatasetDict:
+
+        if isinstance(raw_datasets, DatasetDict):
             if (
                 validation_file
                 and "train" in raw_datasets
@@ -65,9 +66,9 @@ def load_raw_datasets(
                     )["test"]
                     raw_datasets["train"] = raw_datasets["train"].train_test_split(
                         test_size=split, seed=seed
-                    )["TRAIN"]
+                    )["train"]
 
-    if raw_datasets is not DatasetDict:
+    if isinstance(raw_datasets, DatasetDict):
         logger.error("dataset type is unexpected")
 
     return typing.cast(DatasetDict, raw_datasets)
