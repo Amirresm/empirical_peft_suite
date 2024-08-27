@@ -61,6 +61,7 @@ from init_utils import (
     train_tokenizer,
 )
 from logging_utils import logger, setup_logging
+from peft_utils import init_and_load_peft_adapter, init_peft_adapter
 from train_utils import handle_metrics
 
 has_codebleu = False
@@ -182,36 +183,51 @@ def main():
     # Convert the model into an adapter model
     adapter_name = None
     if adapter_args.train_adapter:
-        match adapter_args.adapter_config:
-            case "advfusion":
-                (target_adapter_path, target_adapter_name, adapter_name) = (
-                    init_ah_advfusion(
-                        advadp_path_list=advadp_path_list,
-                        advfusion_target=advfusion_args.advfusion_target,
+        if adapter_args.use_adapterhub:
+            match adapter_args.adapter_config:
+                case "advfusion":
+                    (target_adapter_path, target_adapter_name, adapter_name) = (
+                        init_ah_advfusion(
+                            advadp_path_list=advadp_path_list,
+                            advfusion_target=advfusion_args.advfusion_target,
+                            model=model,
+                            model_dtype=model_dtype,
+                        )
+                    )
+                    advfusion_args.target_adapter_path = target_adapter_path
+                    advfusion_args.target_adapter_name = target_adapter_name
+                    # advfusion_args.fusion_name = fusion_name
+
+                case _:
+                    adapter_name = init_ah_adapter(
+                        adapter_config=adapter_args.adapter_config,
+                        config_title=model_args.config_title,
                         model=model,
                         model_dtype=model_dtype,
                     )
+                    if model_args.preload_adapter:
+                        load_ah_adapter(
+                            adapter_path=model_args.adapter_path,
+                            adapter_name=adapter_name,
+                            model=model,
+                            set_active=True,
+                        )
+            # logger.info(f"Active heads: {model.active_head()}")
+            logger.info(f"Adapter Summary:\n{model.adapter_summary()}")
+        else:
+            if model_args.preload_adapter:
+                init_and_load_peft_adapter(
+                    adapter_path=model_args.adapter_path,
+                    config_title=model_args.config_title,
+                    model=model,
+                    # device=model.device,
                 )
-                advfusion_args.target_adapter_path = target_adapter_path
-                advfusion_args.target_adapter_name = target_adapter_name
-                # advfusion_args.fusion_name = fusion_name
-
-            case _:
-                adapter_name = init_ah_adapter(
+            else:
+                init_peft_adapter(
                     adapter_config=adapter_args.adapter_config,
                     config_title=model_args.config_title,
                     model=model,
-                    model_dtype=model_dtype,
                 )
-                if model_args.preload_adapter:
-                    load_ah_adapter(
-                        adapter_path=model_args.adapter_path,
-                        adapter_name=adapter_name,
-                        model=model,
-                        set_active=True,
-                    )
-        # logger.info(f"Active heads: {model.active_head()}")
-        logger.info(f"Adapter Summary:\n{model.adapter_summary()}")
 
     if is_decoder_only:
         ensure_decoder_only_padding_token(model=model, tokenizer=tokenizer)
@@ -221,7 +237,9 @@ def main():
     )
 
     ensure_embedding_size(
-        model=model, tokenizer=tokenizer, max_source_length=data_args.max_source_length
+        model=model,
+        tokenizer=tokenizer,
+        max_source_length=data_args.max_source_length,
     )
 
     # We need to tokenize inputs and targets.
@@ -238,10 +256,14 @@ def main():
         return
 
     # Get the column names for input/target.
-    dataset_columns = summarization_name_mapping.get(data_args.dataset_name, None)
+    dataset_columns = summarization_name_mapping.get(
+        data_args.dataset_name, None
+    )
     if data_args.text_column is None:
         text_column = (
-            dataset_columns[0] if dataset_columns is not None else column_names[0]
+            dataset_columns[0]
+            if dataset_columns is not None
+            else column_names[0]
         )
     else:
         text_column = data_args.text_column
@@ -251,7 +273,9 @@ def main():
             )
     if data_args.summary_column is None:
         summary_column = (
-            dataset_columns[1] if dataset_columns is not None else column_names[1]
+            dataset_columns[1]
+            if dataset_columns is not None
+            else column_names[1]
         )
     else:
         summary_column = data_args.summary_column
@@ -260,7 +284,9 @@ def main():
         #         f"--summary_column' value '{data_args.summary_column}' needs to be one of: {', '.join(column_names)}"
         #     )
 
-    prefix = data_args.source_prefix if data_args.source_prefix is not None else ""
+    prefix = (
+        data_args.source_prefix if data_args.source_prefix is not None else ""
+    )
 
     # Preprocessing the datasets.
     # filter_dataset(
@@ -339,9 +365,13 @@ def main():
             raise ValueError("--do_train requires a train dataset")
         train_dataset = raw_datasets["train"]
         if data_args.max_train_samples is not None:
-            max_train_samples = min(len(train_dataset), data_args.max_train_samples)
+            max_train_samples = min(
+                len(train_dataset), data_args.max_train_samples
+            )
             train_dataset = train_dataset.select(range(max_train_samples))
-        with training_args.main_process_first(desc="train dataset map pre-processing"):
+        with training_args.main_process_first(
+            desc="train dataset map pre-processing"
+        ):
             train_dataset = train_dataset.map(
                 preprocess_function,
                 batched=True,
@@ -376,7 +406,9 @@ def main():
             #     block_size = min(data_args.block_size, tokenizer.model_max_length)
 
             group_texts = get_text_grouper(block_size)
-            with training_args.main_process_first(desc="grouping texts together"):
+            with training_args.main_process_first(
+                desc="grouping texts together"
+            ):
                 train_dataset = train_dataset.map(
                     group_texts,
                     batched=True,
@@ -394,7 +426,9 @@ def main():
             raise ValueError("--do_eval requires a validation dataset")
         eval_dataset = raw_datasets["validation"]
         if data_args.max_eval_samples is not None:
-            max_eval_samples = min(len(eval_dataset), data_args.max_eval_samples)
+            max_eval_samples = min(
+                len(eval_dataset), data_args.max_eval_samples
+            )
             eval_dataset = eval_dataset.select(range(max_eval_samples))
         with training_args.main_process_first(
             desc="validation dataset map pre-processing"
@@ -432,7 +466,9 @@ def main():
             #     block_size = min(data_args.block_size, tokenizer.model_max_length)
 
             group_texts = get_text_grouper(block_size)
-            with training_args.main_process_first(desc="grouping texts together"):
+            with training_args.main_process_first(
+                desc="grouping texts together"
+            ):
                 eval_dataset = eval_dataset.map(
                     group_texts,
                     batched=True,
@@ -473,7 +509,9 @@ def main():
             raise ValueError("Generation requires a test dataset")
         generation_dataset = raw_datasets["test"]
         if data_args.max_predict_samples is not None:
-            generation_dataset = generation_dataset.select(range(max_predict_samples))
+            generation_dataset = generation_dataset.select(
+                range(max_predict_samples)
+            )
         with training_args.main_process_first(
             desc="generation dataset map pre-processing"
         ):
@@ -527,7 +565,9 @@ def main():
     # sft_trainer: SFTTrainer | None = None
     if training_args.do_train or training_args.do_eval:
         if adapter_args.train_adapter:
-            trainer_class = AdapterTrainer if is_decoder_only else Seq2SeqAdapterTrainer
+            trainer_class = (
+                AdapterTrainer if is_decoder_only else Seq2SeqAdapterTrainer
+            )
         else:
             trainer_class = Trainer if is_decoder_only else Seq2SeqTrainer
 
@@ -539,9 +579,9 @@ def main():
             tokenizer=tokenizer,
             data_collator=data_collator,
             compute_metrics=compute_metrics,
-            preprocess_logits_for_metrics=preprocess_logits_for_metrics
-            if is_decoder_only
-            else None,
+            preprocess_logits_for_metrics=(
+                preprocess_logits_for_metrics if is_decoder_only else None
+            ),
         )
 
         # if use_sft and is_decoder_only:
@@ -572,7 +612,9 @@ def main():
             logger.info(
                 f"metric for choosing best model is {training_args.metric_for_best_model}"
             )
-            callback = EarlyStoppingCallback(early_stopping_patience=data_args.patience)
+            callback = EarlyStoppingCallback(
+                early_stopping_patience=data_args.patience
+            )
             trainer.add_callback(callback)
             training_args.load_best_model_at_end = True
 
@@ -590,7 +632,9 @@ def main():
             checkpoint = last_checkpoint
 
         if adapter_args.adapter_config == "advfusion":
-            zero_freeze_adapter(model, advfusion_args.target_adapter_name, model_dtype)
+            zero_freeze_adapter(
+                model, advfusion_args.target_adapter_name, model_dtype
+            )
 
         timer = CudaTimer()
         timer.start()
@@ -625,7 +669,10 @@ def main():
                 metrics=performance_metrics,
             )
 
-        trainer.save_model()
+        if not adapter_args.use_adapterhub:
+            # model.save_pretrained(training_args.output_dir)
+            trainer.save_model()
+
         handle_metrics(
             trainer=trainer,
             prefix="train",
@@ -710,7 +757,11 @@ def main():
             labels = predict_results.label_ids
             preds = predict_results.predictions
 
-            if labels is not None and preds is not None and trainer.is_world_process_zero():
+            if (
+                labels is not None
+                and preds is not None
+                and trainer.is_world_process_zero()
+            ):
                 if training_args.predict_with_generate:
                     generation_save_dir = (
                         model_args.generation_output_path

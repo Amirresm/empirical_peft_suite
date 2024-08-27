@@ -321,6 +321,7 @@ class DataTrainingArguments:
 
 @dataclass
 class AdapterArguments:
+    use_adapterhub: bool = field(default=False, metadata={"help": "Use adapterhub for peft implementation"})
     train_adapter: bool = field(default=False, metadata={"help": "Train an adapter instead of the full model."})
     load_adapter: Optional[str] = field(
         default="", metadata={"help": "Pre-trained adapter module to be loaded from Hub."}
