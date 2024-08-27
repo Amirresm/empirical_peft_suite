@@ -685,47 +685,48 @@ def main():
     ):
         logger.info("*** Predict ***")
 
-        predict_results = (
-            trainer.predict(
-                predict_dataset,
-                metric_key_prefix="predict",
-            )
-            if is_decoder_only
-            else trainer.predict(
-                predict_dataset,
-                metric_key_prefix="predict",
-                max_length=max_length,
-                # num_beams=num_beams,
-            )
-        )
-
-        handle_metrics(
-            trainer=trainer,
-            prefix="predict",
-            metrics=predict_results.metrics,
-            sample_count=max_predict_samples,
-        )
-
-        labels = predict_results.label_ids
-        preds = predict_results.predictions
-
-        if labels is not None and preds is not None and trainer.is_world_process_zero():
-            if training_args.predict_with_generate:
-                generation_save_dir = (
-                    model_args.generation_output_path
-                    if model_args.generation_output_path is not None
-                    else training_args.output_dir
+        if not is_decoder_only:
+            predict_results = (
+                trainer.predict(
+                    predict_dataset,
+                    metric_key_prefix="predict",
                 )
-                generation_from_predict_encoder_decoder(
-                    tokenizer=tokenizer,
-                    preds=preds,
-                    labels=labels,
-                    raw_dataset=raw_datasets["test"],
-                    tokenized_dataset=predict_dataset,
-                    text_column=text_column,
-                    summary_column=summary_column,
-                    save_path=generation_save_dir,
+                if is_decoder_only
+                else trainer.predict(
+                    predict_dataset,
+                    metric_key_prefix="predict",
+                    max_length=max_length,
+                    # num_beams=num_beams,
                 )
+            )
+
+            handle_metrics(
+                trainer=trainer,
+                prefix="predict",
+                metrics=predict_results.metrics,
+                sample_count=max_predict_samples,
+            )
+
+            labels = predict_results.label_ids
+            preds = predict_results.predictions
+
+            if labels is not None and preds is not None and trainer.is_world_process_zero():
+                if training_args.predict_with_generate:
+                    generation_save_dir = (
+                        model_args.generation_output_path
+                        if model_args.generation_output_path is not None
+                        else training_args.output_dir
+                    )
+                    generation_from_predict_encoder_decoder(
+                        tokenizer=tokenizer,
+                        preds=preds,
+                        labels=labels,
+                        raw_dataset=raw_datasets["test"],
+                        tokenized_dataset=predict_dataset,
+                        text_column=text_column,
+                        summary_column=summary_column,
+                        save_path=generation_save_dir,
+                    )
 
         if is_decoder_only and trainer.is_world_process_zero():
             if training_args.predict_with_generate:
@@ -740,7 +741,7 @@ def main():
                     raw_dataset=raw_datasets["test"],
                     text_column=text_column,
                     summary_column=summary_column,
-                    max_predict_samples=data_args.max_predict_samples,
+                    max_predict_samples=max_predict_samples,
                     max_source_length=data_args.max_source_length,
                     max_new_tokens=model_args.max_new_tokens,
                     padding=padding,
