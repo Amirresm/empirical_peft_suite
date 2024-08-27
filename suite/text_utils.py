@@ -40,3 +40,18 @@ def clean_whitespaces_generations(text):
             new_text += last_ch
 
     return new_text
+
+
+def find_nth(haystack: str, needle: str, n: int) -> int:
+    start = haystack.find(needle)
+    while start >= 0 and n > 1:
+        start = haystack.find(needle, start+len(needle))
+        n -= 1
+    return start
+
+def spp_split(input):
+    idx_split = find_nth(input, '"""', 2) + 3
+    prompt = input[:idx_split]
+    completion = input[idx_split:]
+    return prompt, completion
+

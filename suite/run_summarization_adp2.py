@@ -1,3 +1,4 @@
+import os
 import evaluate
 import torch
 from adapters import (
@@ -10,8 +11,11 @@ from transformers import (
     EarlyStoppingCallback,
     Seq2SeqTrainer,
     Trainer,
+    default_data_collator,
     set_seed,
 )
+
+# from trl import DataCollatorForCompletionOnlyLM, SFTConfig, SFTTrainer
 
 from adapter_utils import (
     init_ah_adapter,
@@ -29,6 +33,7 @@ from dataset_utils import (
     get_decoder_only_preprocessor,
     get_encoder_decoder_preprocessor,
     get_generation_preprocessor,
+    get_text_grouper,
     load_raw_datasets,
 )
 from evaluation_utils import get_compute_metrics, preprocess_logits_for_metrics
@@ -39,7 +44,11 @@ from general_utits import (
     check_version,
     handle_last_checkpoint,
 )
-from generation_utils import generation_from_predict
+from generation_utils import (
+    generation_decoder_only,
+    generation_from_predict_encoder_decoder,
+    run_humaneval,
+)
 from init_utils import (
     ensure_decoder_only_padding_token,
     ensure_decoder_start_token,
@@ -64,6 +73,8 @@ has_codebleu = False
 check_dependencies()
 check_version()
 check_nltk_data()
+
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # FATAL
 
 
 def main():
@@ -333,6 +344,40 @@ def main():
             )
             logger.info(f"train_dataset:\n{train_dataset}")
 
+        if is_decoder_only:
+            # if data_args.block_size is None:
+            block_size = tokenizer.model_max_length
+            if block_size > model.config.max_position_embeddings:
+                logger.warning(
+                    f"The tokenizer picked seems to have a very large `model_max_length` ({tokenizer.model_max_length}). "
+                    f"Using block_size={min(data_args.max_source_length, model.config.max_position_embeddings)} instead. You can change that default value by passing --block_size xxx."
+                )
+                if model.config.max_position_embeddings > 0:
+                    block_size = min(
+                        data_args.max_source_length,
+                        model.config.max_position_embeddings,
+                    )
+                else:
+                    block_size = data_args.max_source_length
+            # else:
+            #     if data_args.block_size > tokenizer.model_max_length:
+            #         logger.warning(
+            #             f"The block_size passed ({data_args.block_size}) is larger than the maximum length for the model "
+            #             f"({tokenizer.model_max_length}). Using block_size={tokenizer.model_max_length}."
+            #         )
+            #     block_size = min(data_args.block_size, tokenizer.model_max_length)
+
+            group_texts = get_text_grouper(block_size)
+            with training_args.main_process_first(desc="grouping texts together"):
+                train_dataset = train_dataset.map(
+                    group_texts,
+                    batched=True,
+                    num_proc=data_args.preprocessing_num_workers,
+                    load_from_cache_file=not data_args.overwrite_cache,
+                    desc=f"Grouping texts in chunks of {block_size}",
+                )
+                logger.info(f"train_dataset:\n{train_dataset}")
+
     max_eval_samples = data_args.max_eval_samples
     eval_dataset = None
     if training_args.do_eval:
@@ -354,6 +399,39 @@ def main():
                 load_from_cache_file=not data_args.overwrite_cache,
                 desc="Running tokenizer on validation dataset",
             )
+            logger.info(f"eval_dataset:\n{eval_dataset}")
+        if is_decoder_only:
+            # if data_args.block_size is None:
+            block_size = tokenizer.model_max_length
+            if block_size > model.config.max_position_embeddings:
+                logger.warning(
+                    f"The tokenizer picked seems to have a very large `model_max_length` ({tokenizer.model_max_length}). "
+                    f"Using block_size={min(data_args.max_source_length, model.config.max_position_embeddings)} instead. You can change that default value by passing --block_size xxx."
+                )
+                if model.config.max_position_embeddings > 0:
+                    block_size = min(
+                        data_args.max_source_length,
+                        model.config.max_position_embeddings,
+                    )
+                else:
+                    block_size = data_args.max_source_length
+            # else:
+            #     if data_args.block_size > tokenizer.model_max_length:
+            #         logger.warning(
+            #             f"The block_size passed ({data_args.block_size}) is larger than the maximum length for the model "
+            #             f"({tokenizer.model_max_length}). Using block_size={tokenizer.model_max_length}."
+            #         )
+            #     block_size = min(data_args.block_size, tokenizer.model_max_length)
+
+            group_texts = get_text_grouper(block_size)
+            with training_args.main_process_first(desc="grouping texts together"):
+                eval_dataset = eval_dataset.map(
+                    group_texts,
+                    batched=True,
+                    num_proc=data_args.preprocessing_num_workers,
+                    load_from_cache_file=not data_args.overwrite_cache,
+                    desc=f"Grouping texts in chunks of {block_size}",
+                )
             logger.info(f"eval_dataset:\n{eval_dataset}")
 
     max_predict_samples = data_args.max_predict_samples
@@ -405,10 +483,11 @@ def main():
         -100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
     )
     data_collator = (
-        DataCollatorForLanguageModeling(
-            tokenizer,
-            mlm=False,
-        )
+        default_data_collator
+        # DataCollatorForLanguageModeling(
+        #     tokenizer,
+        #     mlm=False,
+        # )
         if is_decoder_only
         else DataCollatorForSeq2Seq(
             tokenizer,
@@ -435,6 +514,9 @@ def main():
 
     # Initialize our Trainer
     trainer: Trainer | Seq2SeqTrainer | None = None
+
+    # use_sft = False
+    # sft_trainer: SFTTrainer | None = None
     if training_args.do_train or training_args.do_eval:
         if adapter_args.train_adapter:
             trainer_class = AdapterTrainer if is_decoder_only else Seq2SeqAdapterTrainer
@@ -453,6 +535,30 @@ def main():
             if is_decoder_only
             else None,
         )
+
+        # if use_sft and is_decoder_only:
+        #     response_template_with_context = "\n### Assistant:"
+        #     response_template_ids = tokenizer.encode(
+        #         response_template_with_context, add_special_tokens=False
+        #     )[2:]
+        #     sft_data_collator = DataCollatorForCompletionOnlyLM(
+        #         response_template_ids, tokenizer=tokenizer
+        #     )
+
+        #     sft_args = SFTConfig(
+        #         output_dir=training_args.output_dir,
+        #     )
+        #     sft_trainer = SFTTrainer(
+        #         model=model,
+        #         args=sft_args,
+        #         train_dataset=train_dataset,
+        #         eval_dataset=eval_dataset,
+        #         tokenizer=tokenizer,
+        #         data_collator=sft_data_collator,
+        #         compute_metrics=compute_metrics,
+        #         preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+        #     )
+
         # Early stopping
         if data_args.patience and data_args.patience > 0:
             logger.info(
@@ -480,6 +586,9 @@ def main():
 
         timer = CudaTimer()
         timer.start()
+        # if sft_trainer is not None:
+        #     train_result = sft_trainer.train(resume_from_checkpoint=checkpoint)
+        # else:
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
 
         if adapter_args.adapter_config == "advfusion":
@@ -599,8 +708,7 @@ def main():
                     if model_args.generation_output_path is not None
                     else training_args.output_dir
                 )
-
-                generation_from_predict(
+                generation_from_predict_encoder_decoder(
                     tokenizer=tokenizer,
                     preds=preds,
                     labels=labels,
@@ -609,6 +717,37 @@ def main():
                     text_column=text_column,
                     summary_column=summary_column,
                     save_path=generation_save_dir,
+                )
+
+        if is_decoder_only and trainer.is_world_process_zero():
+            if training_args.predict_with_generate:
+                generation_save_dir = (
+                    model_args.generation_output_path
+                    if model_args.generation_output_path is not None
+                    else training_args.output_dir
+                )
+                generation_decoder_only(
+                    model=model,
+                    tokenizer=tokenizer,
+                    raw_dataset=raw_datasets["test"],
+                    text_column=text_column,
+                    max_predict_samples=data_args.max_predict_samples,
+                    max_source_length=data_args.max_source_length,
+                    max_new_tokens=model_args.max_new_tokens,
+                    padding=padding,
+                    save_path=generation_save_dir,
+                    metric_rouge=metric_rouge,
+                    metric_bleu=metric_bleu,
+                    metric_path=data_args.metric_path,
+                )
+
+            num_samples_per_task = data_args.humaneval_num
+            if num_samples_per_task > 0:
+                run_humaneval(
+                    model=model,
+                    tokenizer=tokenizer,
+                    num_samples_per_task=num_samples_per_task,
+                    output_dir=training_args.output_dir,
                 )
         # if trainer.is_world_process_zero():
         #     source = raw_datasets["test"].select(

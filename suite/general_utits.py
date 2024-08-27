@@ -50,39 +50,6 @@ def ensure_path_exists(path):
     pathlib.Path(path).mkdir(parents=True, exist_ok=True)
 
 
-@torch.inference_mode()
-def generate_batch_completion(model, tokenizer, prompt, batch_size) -> list[str]:
-    prompt_input = create_llama_prompt(prompt)
-    input_batch = [prompt_input for _ in range(batch_size)]
-    inputs = tokenizer(input_batch, return_tensors="pt").to(model.device)
-
-    generated_ids = model.generate(
-        **inputs,
-        # use_cache=True,
-        max_new_tokens=200,
-        temperature=1.0,
-        top_k=50,
-        top_p=0.95,
-        do_sample=True,
-        repetition_penalty=1.1,
-        eos_token_id=tokenizer.eos_token_id,
-        pad_token_id=tokenizer.pad_token_id,
-    )
-
-    batch_completions = tokenizer.batch_decode(
-        generated_ids,
-        skip_special_tokens=True,
-    )
-
-    # res = [filter_code(fix_indents(extract_code(completion))) for completion in batch_completions]
-    res = [fix_indents(completion) for completion in batch_completions]
-    res = batch_completions
-    logger.info(f"Generated completions prompt:\n {prompt}")
-    # logger.info(f"Generated completions raw:\n {batch_completions[0]}")
-    logger.info(f"Generated completions example:\n {res[0]}")
-    return res
-
-
 def handle_last_checkpoint(output_dir, overwrite_output_dir, resume_from_checkpoint):
     last_checkpoint = None
     if os.path.isdir(output_dir) and not overwrite_output_dir:

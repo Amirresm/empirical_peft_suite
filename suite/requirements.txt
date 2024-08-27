@@ -10,3 +10,5 @@ evaluate==0.4.2
 rouge_score==0.1.2
 bitsandbytes==0.43.3
 tensorboardX==2.6.2.2
+trl==0.9.6
+# -e ./codeeval/human-eval

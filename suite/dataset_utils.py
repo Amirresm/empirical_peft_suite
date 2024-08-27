@@ -1,7 +1,9 @@
+from itertools import chain
+
 from datasets import DatasetDict, load_dataset
 from huggingface_hub.constants import typing
 
-from text_utils import create_llama_prompt
+from text_utils import create_llama_prompt, find_nth
 from logging_utils import logger
 
 
@@ -143,7 +145,7 @@ def get_encoder_decoder_preprocessor(
     return preprocess_encoder_decoder_function
 
 
-def get_decoder_only_preprocessor(
+def get_decoder_only_preprocessor_depr(
     tokenizer,
     text_column,
     summary_column,
@@ -193,6 +195,59 @@ def get_decoder_only_preprocessor(
 
     return preprocess_decoder_only_function
 
+
+def get_decoder_only_preprocessor(
+    tokenizer,
+    text_column,
+    summary_column,
+    max_source_length,
+    padding,
+    is_text_tokenized=False,
+    is_summary_tokenized=False,
+    ignore_pad_token_for_loss=False,
+):
+    def preprocess_decoder_only_function(examples):
+        samples = []
+        for i in range(len(examples[text_column])):
+            if examples[text_column][i] and (
+                summary_column == "NONE" or examples[summary_column][i]
+            ):
+                input = examples[text_column][i]
+                target = (
+                    None if summary_column == "NONE" else examples[summary_column][i]
+                )
+                if is_text_tokenized:
+                    input = " ".join(input)
+                if target and is_summary_tokenized:
+                    target = " ".join(target)
+
+                # input = 'def '.join(input.split('def ')[:2])
+                idx_split = find_nth(input, '"""', 2) + 3
+                prompt = input[:idx_split]
+                completion = input[idx_split:]
+                sample = create_llama_prompt(
+                    input, is_training=True, eos_token=tokenizer.eos_token
+                )
+                samples.append(sample)
+
+        tokenized_samples = tokenizer(
+            samples,
+            max_length=max_source_length,
+            padding=padding,
+            truncation=True,
+        )
+
+        # labels = tokenized_samples["input_ids"].copy()
+        # if padding == "max_length" and ignore_pad_token_for_loss:
+        #     labels = [
+        #         [(id if id != tokenizer.pad_token_id else -100) for id in label]
+        #         for label in labels
+        #     ]
+
+        # tokenized_samples["labels"] = labels
+        return tokenized_samples
+
+    return preprocess_decoder_only_function
 
 def get_generation_preprocessor(
     tokenizer,
@@ -245,3 +300,21 @@ def get_generation_preprocessor(
         return tokenized_samples
 
     return generation_preprocess_function
+
+def get_text_grouper(block_size: int):
+    def group_texts(examples):
+        # Concatenate all texts.
+        concatenated_examples = {k: list(chain(*examples[k])) for k in examples.keys()}
+        total_length = len(concatenated_examples[list(examples.keys())[0]])
+        # We drop the small remainder, and if the total_length < block_size  we exclude this batch and return an empty dict.
+        # We could add padding if the model supported it instead of this drop, you can customize this part to your needs.
+        total_length = (total_length // block_size) * block_size
+        # Split by chunks of max_len.
+        result = {
+            k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
+            for k, t in concatenated_examples.items()
+        }
+        result["labels"] = result["input_ids"].copy()
+        return result
+
+    return group_texts
