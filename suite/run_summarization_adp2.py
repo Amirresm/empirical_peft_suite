@@ -216,18 +216,24 @@ def main():
             logger.info(f"Adapter Summary:\n{model.adapter_summary()}")
         else:
             if model_args.preload_adapter:
-                init_and_load_peft_adapter(
+                model = init_and_load_peft_adapter(
                     adapter_path=model_args.adapter_path,
                     config_title=model_args.config_title,
                     model=model,
                     # device=model.device,
                 )
             else:
-                init_peft_adapter(
+                model = init_peft_adapter(
                     adapter_config=adapter_args.adapter_config,
                     config_title=model_args.config_title,
                     model=model,
                 )
+            logger.info("Adapter Summary:\n")
+            model.print_trainable_parameters()
+            if hasattr(model, "get_model_status") and callable(model.get_model_status):
+                logger.info(f"Model Status:\n{model.get_model_status()}")
+            if hasattr(model, "get_layer_status") and callable(model.get_layer_status):
+                logger.info(f"Layer Status:\n{model.get_layer_status()}")
 
     if is_decoder_only:
         ensure_decoder_only_padding_token(model=model, tokenizer=tokenizer)
@@ -564,7 +570,7 @@ def main():
     # use_sft = False
     # sft_trainer: SFTTrainer | None = None
     if training_args.do_train or training_args.do_eval:
-        if adapter_args.train_adapter:
+        if adapter_args.train_adapter and adapter_args.use_adapterhub:
             trainer_class = (
                 AdapterTrainer if is_decoder_only else Seq2SeqAdapterTrainer
             )
@@ -680,7 +686,7 @@ def main():
             sample_count=max_train_samples,
         )
 
-        if adapter_args.train_adapter:
+        if adapter_args.train_adapter and adapter_args.use_adapterhub:
             save_ah_adapter(
                 adapter_path=model_args.adapter_path,
                 adapter_config=adapter_args.adapter_config,
