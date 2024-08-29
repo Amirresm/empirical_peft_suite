@@ -1,4 +1,4 @@
-from bleu2.bleu import bleuFromMaps, normalize, computeMaps2
+from .bleu import bleuFromMaps, normalize, computeMaps2
 
 
 def prepare_for_bleu2(preds_list, refs_list):

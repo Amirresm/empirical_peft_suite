@@ -545,7 +545,7 @@ def main():
     )
 
     # Initialize our Trainer
-    trainer: Trainer = Trainer()
+    trainer: Trainer = Trainer(model=model)
 
     # use_sft = False
     # sft_trainer: SFTTrainer | None = None

@@ -1,5 +1,4 @@
-from torch import log
-from bleu2.calc_bleu2 import calculate_bleu2
+from lib.bleu2.calc_bleu2 import calculate_bleu2
 from logging_utils import logger
 
 import nltk

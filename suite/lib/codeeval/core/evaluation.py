@@ -1,4 +1,4 @@
-from human_eval.data import write_jsonl, read_problems
+from .data import write_jsonl, read_problems
 from transformers import (
     PreTrainedModel,
     PreTrainedTokenizer,
@@ -39,8 +39,12 @@ def run_eval(
     out_path: str,
     generate_batch_completion: BatchGenerator,
     format_tabs: bool = False,
+    limit: int | None = None,
 ):
     problems = read_problems()
+    if limit is not None and limit > 0 and limit < len(problems):
+        problems = dict(itertools.islice(problems.items(), limit))
+
     # problems = dict(itertools.islice(problems.items(), 20))
     samples = []
     pbar = tqdm(total=len(problems) * num_samples_per_task)

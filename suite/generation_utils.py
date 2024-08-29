@@ -2,7 +2,7 @@ import os
 import numpy as np
 import torch
 
-from codeeval.core import run_eval
+from lib.codeeval.core import run_eval
 
 from evaluation_utils import calc_all_metrics
 from general_utits import ensure_path_exists
@@ -262,4 +262,5 @@ def run_humaneval(model, tokenizer, num_samples_per_task, output_dir):
             out_path,
             generate_batch_completion,
             True,
+            limit=10
         )
