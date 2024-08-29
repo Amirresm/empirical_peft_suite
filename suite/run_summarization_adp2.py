@@ -6,9 +6,6 @@ from adapters import (
     Seq2SeqAdapterTrainer,
 )
 from transformers import (
-    AutoModelForCausalLM,
-    AutoModelForSeq2SeqLM,
-    DataCollatorForLanguageModeling,
     DataCollatorForSeq2Seq,
     EarlyStoppingCallback,
     Seq2SeqTrainer,
@@ -34,9 +31,9 @@ from constants import summarization_name_mapping
 from dataset_utils import (
     get_decoder_only_preprocessor,
     get_encoder_decoder_preprocessor,
-    get_generation_preprocessor,
-    get_text_grouper,
+    group_dataset,
     load_raw_datasets,
+    process_dataset,
 )
 from evaluation_utils import get_compute_metrics, preprocess_logits_for_metrics
 from general_utits import (
@@ -352,68 +349,32 @@ def main():
         )
     )
 
-    generation_preprocess_function = get_generation_preprocessor(
-        tokenizer=tokenizer,
-        text_column=text_column,
-        max_source_length=data_args.max_source_length,
-        padding=padding,
-        is_text_tokenized=data_args.text_tokenized,
-        ignore_pad_token_for_loss=data_args.ignore_pad_token_for_loss,
-    )
-
     max_train_samples = data_args.max_train_samples
     train_dataset = None
     if training_args.do_train:
         if "train" not in raw_datasets:
             raise ValueError("--do_train requires a train dataset")
-        train_dataset = raw_datasets["train"]
-        if data_args.max_train_samples is not None:
-            max_train_samples = min(len(train_dataset), data_args.max_train_samples)
-            train_dataset = train_dataset.select(range(max_train_samples))
-        with training_args.main_process_first(desc="train dataset map pre-processing"):
-            train_dataset = train_dataset.map(
-                preprocess_function,
-                batched=True,
-                num_proc=data_args.preprocessing_num_workers,
-                remove_columns=column_names,
-                load_from_cache_file=not data_args.overwrite_cache,
-                desc="Running tokenizer on train dataset",
-            )
-            logger.info(f"train_dataset:\n{train_dataset}")
+        train_dataset, max_train_samples = process_dataset(
+            raw_datasets=raw_datasets,
+            max_sample_count=max_train_samples,
+            column_names=column_names,
+            split="train",
+            preprocess_function=preprocess_function,
+            main_process_first=training_args.main_process_first,
+            overwrite_cache=data_args.overwrite_cache,
+            preprocessing_num_workers=data_args.preprocessing_num_workers,
+        )
 
         if is_decoder_only:
-            # if data_args.block_size is None:
-            block_size = tokenizer.model_max_length
-            if block_size > model.config.max_position_embeddings:
-                logger.warning(
-                    f"The tokenizer picked seems to have a very large `model_max_length` ({tokenizer.model_max_length}). "
-                    f"Using block_size={min(data_args.max_source_length, model.config.max_position_embeddings)} instead. You can change that default value by passing --block_size xxx."
-                )
-                if model.config.max_position_embeddings > 0:
-                    block_size = min(
-                        data_args.max_source_length,
-                        model.config.max_position_embeddings,
-                    )
-                else:
-                    block_size = data_args.max_source_length
-            # else:
-            #     if data_args.block_size > tokenizer.model_max_length:
-            #         logger.warning(
-            #             f"The block_size passed ({data_args.block_size}) is larger than the maximum length for the model "
-            #             f"({tokenizer.model_max_length}). Using block_size={tokenizer.model_max_length}."
-            #         )
-            #     block_size = min(data_args.block_size, tokenizer.model_max_length)
-
-            group_texts = get_text_grouper(block_size)
-            with training_args.main_process_first(desc="grouping texts together"):
-                train_dataset = train_dataset.map(
-                    group_texts,
-                    batched=True,
-                    num_proc=data_args.preprocessing_num_workers,
-                    load_from_cache_file=not data_args.overwrite_cache,
-                    desc=f"Grouping texts in chunks of {block_size}",
-                )
-                logger.info(f"train_dataset:\n{train_dataset}")
+            train_dataset = group_dataset(
+                tokenizer=tokenizer,
+                model=model,
+                dataset=train_dataset,
+                max_source_length=data_args.max_source_length,
+                main_process_first=training_args.main_process_first,
+                overwrite_cache=data_args.overwrite_cache,
+                preprocessing_num_workers=data_args.preprocessing_num_workers,
+            )
 
     max_eval_samples = data_args.max_eval_samples
     eval_dataset = None
@@ -421,55 +382,26 @@ def main():
         max_target_length = data_args.val_max_target_length
         if "validation" not in raw_datasets:
             raise ValueError("--do_eval requires a validation dataset")
-        eval_dataset = raw_datasets["validation"]
-        if data_args.max_eval_samples is not None:
-            max_eval_samples = min(len(eval_dataset), data_args.max_eval_samples)
-            eval_dataset = eval_dataset.select(range(max_eval_samples))
-        with training_args.main_process_first(
-            desc="validation dataset map pre-processing"
-        ):
-            eval_dataset = eval_dataset.map(
-                preprocess_function,
-                batched=True,
-                num_proc=data_args.preprocessing_num_workers,
-                remove_columns=column_names,
-                load_from_cache_file=not data_args.overwrite_cache,
-                desc="Running tokenizer on validation dataset",
-            )
-            logger.info(f"eval_dataset:\n{eval_dataset}")
+        eval_dataset, max_eval_samples = process_dataset(
+            raw_datasets=raw_datasets,
+            max_sample_count=max_eval_samples,
+            column_names=column_names,
+            split="validation",
+            preprocess_function=preprocess_function,
+            main_process_first=training_args.main_process_first,
+            overwrite_cache=data_args.overwrite_cache,
+            preprocessing_num_workers=data_args.preprocessing_num_workers,
+        )
         if is_decoder_only:
-            # if data_args.block_size is None:
-            block_size = tokenizer.model_max_length
-            if block_size > model.config.max_position_embeddings:
-                logger.warning(
-                    f"The tokenizer picked seems to have a very large `model_max_length` ({tokenizer.model_max_length}). "
-                    f"Using block_size={min(data_args.max_source_length, model.config.max_position_embeddings)} instead. You can change that default value by passing --block_size xxx."
-                )
-                if model.config.max_position_embeddings > 0:
-                    block_size = min(
-                        data_args.max_source_length,
-                        model.config.max_position_embeddings,
-                    )
-                else:
-                    block_size = data_args.max_source_length
-            # else:
-            #     if data_args.block_size > tokenizer.model_max_length:
-            #         logger.warning(
-            #             f"The block_size passed ({data_args.block_size}) is larger than the maximum length for the model "
-            #             f"({tokenizer.model_max_length}). Using block_size={tokenizer.model_max_length}."
-            #         )
-            #     block_size = min(data_args.block_size, tokenizer.model_max_length)
-
-            group_texts = get_text_grouper(block_size)
-            with training_args.main_process_first(desc="grouping texts together"):
-                eval_dataset = eval_dataset.map(
-                    group_texts,
-                    batched=True,
-                    num_proc=data_args.preprocessing_num_workers,
-                    load_from_cache_file=not data_args.overwrite_cache,
-                    desc=f"Grouping texts in chunks of {block_size}",
-                )
-            logger.info(f"eval_dataset:\n{eval_dataset}")
+            eval_dataset = group_dataset(
+                tokenizer=tokenizer,
+                model=model,
+                dataset=eval_dataset,
+                max_source_length=data_args.max_source_length,
+                main_process_first=training_args.main_process_first,
+                overwrite_cache=data_args.overwrite_cache,
+                preprocessing_num_workers=data_args.preprocessing_num_workers,
+            )
 
     max_predict_samples = data_args.max_predict_samples
     predict_dataset = None
@@ -477,44 +409,17 @@ def main():
         max_target_length = data_args.val_max_target_length
         if "test" not in raw_datasets:
             raise ValueError("--do_predict requires a test dataset")
-        predict_dataset = raw_datasets["test"]
-        if data_args.max_predict_samples is not None:
-            max_predict_samples = min(
-                len(predict_dataset), data_args.max_predict_samples
-            )
-            predict_dataset = predict_dataset.select(range(max_predict_samples))
-        with training_args.main_process_first(
-            desc="prediction dataset map pre-processing"
-        ):
-            predict_dataset = predict_dataset.map(
-                preprocess_function,
-                batched=True,
-                num_proc=data_args.preprocessing_num_workers,
-                remove_columns=column_names,
-                load_from_cache_file=not data_args.overwrite_cache,
-                desc="Running tokenizer on prediction dataset",
-            )
-            logger.info(f"predict_dataset:\n{predict_dataset}")
+        predict_dataset, max_predict_samples = process_dataset(
+            raw_datasets=raw_datasets,
+            max_sample_count=max_predict_samples,
+            column_names=column_names,
+            split="test",
+            preprocess_function=preprocess_function,
+            main_process_first=training_args.main_process_first,
+            overwrite_cache=data_args.overwrite_cache,
+            preprocessing_num_workers=data_args.preprocessing_num_workers,
+        )
 
-    if training_args.predict_with_generate:
-        max_target_length = data_args.val_max_target_length
-        if "test" not in raw_datasets:
-            raise ValueError("Generation requires a test dataset")
-        generation_dataset = raw_datasets["test"]
-        if data_args.max_predict_samples is not None:
-            generation_dataset = generation_dataset.select(range(max_predict_samples))
-        with training_args.main_process_first(
-            desc="generation dataset map pre-processing"
-        ):
-            generation_dataset = generation_dataset.map(
-                generation_preprocess_function,
-                batched=True,
-                num_proc=data_args.preprocessing_num_workers,
-                remove_columns=column_names,
-                load_from_cache_file=not data_args.overwrite_cache,
-                desc="Running tokenizer on generation dataset",
-            )
-            logger.info(f"generation_dataset:\n{generation_dataset}")
     # Data collator
     label_pad_token_id = (
         -100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
@@ -634,6 +539,7 @@ def main():
                 metrics=train_result.metrics,
                 sample_count=max_train_samples,
                 output_dir=training_args.output_dir,
+                trainer=trainer,
             )
             unfreeze_reload_adapter(
                 model,
@@ -652,6 +558,7 @@ def main():
                 prefix="performance",
                 metrics=performance_metrics,
                 output_dir=training_args.output_dir,
+                trainer=trainer,
             )
 
         if not adapter_args.use_adapterhub:
@@ -663,6 +570,7 @@ def main():
             metrics=train_result.metrics,
             sample_count=max_train_samples,
             output_dir=training_args.output_dir,
+            trainer=trainer,
         )
 
         if adapter_args.train_adapter and adapter_args.use_adapterhub:
@@ -707,6 +615,7 @@ def main():
             metrics=metrics,
             sample_count=max_eval_samples,
             output_dir=training_args.output_dir,
+            trainer=trainer,
         )
 
     # predictions on test set (only for encoder-decoders)
@@ -731,6 +640,7 @@ def main():
             metrics=predict_results.metrics,
             sample_count=max_predict_samples,
             output_dir=training_args.output_dir,
+            trainer=trainer,
         )
 
         labels = predict_results.label_ids

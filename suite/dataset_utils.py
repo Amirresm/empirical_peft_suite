@@ -327,3 +327,79 @@ def get_text_grouper(block_size: int):
         return result
 
     return group_texts
+
+
+def process_dataset(
+    raw_datasets,
+    max_sample_count,
+    column_names,
+    split,
+    preprocess_function,
+    main_process_first,
+    overwrite_cache=False,
+    preprocessing_num_workers=None,
+):
+    dataset = None
+    if split not in raw_datasets:
+        raise ValueError(f"--do_{split} requires a train dataset")
+    dataset = raw_datasets[split]
+    if max_sample_count is not None:
+        max_sample_count = min(len(dataset), max_sample_count)
+        dataset = dataset.select(range(max_sample_count))
+    with main_process_first(desc=f"{split} dataset map pre-processing"):
+        dataset = dataset.map(
+            preprocess_function,
+            batched=True,
+            num_proc=preprocessing_num_workers,
+            remove_columns=column_names,
+            load_from_cache_file=not overwrite_cache,
+            desc=f"Running tokenizer on {split} dataset",
+        )
+        logger.info(f"{split}_dataset:\n{dataset}")
+        return dataset, max_sample_count
+
+
+
+def group_dataset(
+    tokenizer,
+    model,
+    dataset,
+    max_source_length,
+    main_process_first,
+    overwrite_cache=False,
+    preprocessing_num_workers=None,
+):
+    # if data_args.block_size is None:
+    block_size = tokenizer.model_max_length
+    if block_size > model.config.max_position_embeddings:
+        logger.warning(
+            f"The tokenizer picked seems to have a very large `model_max_length` ({tokenizer.model_max_length}). "
+            f"Using block_size={min(max_source_length, model.config.max_position_embeddings)} instead. You can change that default value by passing --block_size xxx."
+        )
+        if model.config.max_position_embeddings > 0:
+            block_size = min(
+                max_source_length,
+                model.config.max_position_embeddings,
+            )
+        else:
+            block_size = max_source_length
+    # else:
+    #     if data_args.block_size > tokenizer.model_max_length:
+    #         logger.warning(
+    #             f"The block_size passed ({data_args.block_size}) is larger than the maximum length for the model "
+    #             f"({tokenizer.model_max_length}). Using block_size={tokenizer.model_max_length}."
+    #         )
+    #     block_size = min(data_args.block_size, tokenizer.model_max_length)
+
+    group_texts = get_text_grouper(block_size)
+    with main_process_first(desc="grouping texts together"):
+        dataset = dataset.map(
+            group_texts,
+            batched=True,
+            num_proc=preprocessing_num_workers,
+            load_from_cache_file=not overwrite_cache,
+            desc=f"Grouping texts in chunks of {block_size}",
+        )
+        logger.info(f"grouped dataset:\n{dataset}")
+        return dataset
+
