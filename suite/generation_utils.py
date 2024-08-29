@@ -2,6 +2,7 @@ import os
 import numpy as np
 import torch
 
+from lib.codeeval.human_eval.evaluation import evaluate_functional_correctness
 from lib.codeeval.core import run_eval
 
 from evaluation_utils import calc_all_metrics
@@ -249,7 +250,7 @@ def generate_batch_completion(model, tokenizer, prompt, batch_size) -> list[str]
     return res
 
 
-def run_humaneval(model, tokenizer, num_samples_per_task, output_dir):
+def run_humaneval(model, tokenizer, num_samples_per_task, output_dir, calc_passk=True):
     if num_samples_per_task > 0:
         out_path = os.path.join(output_dir, f"humaneval_{num_samples_per_task}")
         os.makedirs(out_path, exist_ok=True)
@@ -262,5 +263,16 @@ def run_humaneval(model, tokenizer, num_samples_per_task, output_dir):
             out_path,
             generate_batch_completion,
             True,
-            limit=10
+            # limit=10,
         )
+
+        if calc_passk:
+            pass_at_k = evaluate_functional_correctness(
+                sample_file=out_path,
+                # k=[1, 10, 100],
+                # n_workers=4,
+                # timeout=3.0,
+            )
+
+            logger.info(f"Pass@k: {pass_at_k}")
+            logger.info(f"Correct count {pass_at_k["pass@1"] * 164}")
