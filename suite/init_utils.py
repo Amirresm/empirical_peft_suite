@@ -1,5 +1,7 @@
 import os
 
+from adapters import AutoAdapterModel
+
 from constants import MULTILINGUAL_TOKENIZERS
 from logging_utils import logger
 
@@ -70,7 +72,7 @@ def init_model(
     cache_dir,
     quantization_mode=None,
     is_decoder_only=False,
-):
+    ):
     bnb_config = None
     model_dtype = None
     if quantization_mode == "4bit":

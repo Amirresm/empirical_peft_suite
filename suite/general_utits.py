@@ -1,10 +1,12 @@
 import os
 import pathlib
+import json
+import datetime
+
 from filelock import FileLock
 import nltk
 
 from logging_utils import logger
-from text_utils import create_llama_prompt, fix_indents
 
 import adapters
 import accelerate
@@ -42,7 +44,7 @@ def check_nltk_data():
             raise LookupError(
                 "Offline mode: run this script without TRANSFORMERS_OFFLINE first to download nltk data files"
             )
-        with FileLock(".lock") as lock:
+        with FileLock(".lock") as _:
             nltk.download("punkt", quiet=True)
 
 
@@ -85,3 +87,63 @@ class CudaTimer:
             # self.timer.record()
             return self.timer.elapsed_time(self.end_timer) / (1000)
         return None
+
+def _secs2timedelta(secs):
+    """
+    convert seconds to hh:mm:ss.msec, msecs rounded to 2 decimals
+    """
+
+    msec = int(abs(secs - int(secs)) * 100)
+    return f"{datetime.timedelta(seconds=int(secs))}.{msec:02d}"
+
+def metrics_format(metrics):
+    """
+    Reformat Trainer metrics values to a human-readable format
+
+    Args:
+        metrics (`Dict[str, float]`):
+            The metrics returned from train/evaluate/predict
+
+    Returns:
+        metrics (`Dict[str, float]`): The reformatted metrics
+    """
+
+    metrics_copy = metrics.copy()
+    for k, v in metrics_copy.items():
+        if "_mem_" in k:
+            metrics_copy[k] = f"{ v >> 20 }MB"
+        elif "_runtime" in k:
+            metrics_copy[k] = _secs2timedelta(v)
+        elif k == "total_flos":
+            metrics_copy[k] = f"{ int(v) >> 30 }GF"
+        elif isinstance(metrics_copy[k], float):
+            metrics_copy[k] = round(v, 4)
+
+    return metrics_copy
+
+
+def log_metrics(split, metrics):
+    print(f"***** {split} metrics *****")
+    metrics_formatted = metrics_format(metrics)
+    k_width = max(len(str(x)) for x in metrics_formatted.keys())
+    v_width = max(len(str(x)) for x in metrics_formatted.values())
+    for key in sorted(metrics_formatted.keys()):
+        print(f"  {key: <{k_width}} = {metrics_formatted[key]:>{v_width}}")
+
+def save_metrics(split, metrics, output_dir, combined=True):
+    output_dir = os.path.join(output_dir, f"{split}_results.json")
+    with open(output_dir, "w") as f:
+        json.dump(metrics, f, indent=4, sort_keys=True)
+
+    if combined:
+        output_dir = os.path.join(output_dir, "all_results.json")
+        if os.path.exists(output_dir):
+            with open(output_dir, "r") as f:
+                all_metrics = json.load(f)
+        else:
+            all_metrics = {}
+
+        all_metrics.update(metrics)
+        with open(output_dir, "w") as f:
+            json.dump(all_metrics, f, indent=4, sort_keys=True)
+

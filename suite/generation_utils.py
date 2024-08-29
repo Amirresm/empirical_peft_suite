@@ -200,6 +200,8 @@ def generation_decoder_only(
     )
     logger.info(f"Generation Results:\n{results}")
 
+    return results
+
 
 def process_decoder_only_generation(inputs, outputs):
     preds = []
@@ -273,6 +275,11 @@ def run_humaneval(model, tokenizer, num_samples_per_task, output_dir, calc_passk
                 # n_workers=4,
                 # timeout=3.0,
             )
+            pass_at_k["pass@1_count"] = pass_at_k["pass@1"] * 164
 
             logger.info(f"Pass@k: {pass_at_k}")
             logger.info(f"Correct count {pass_at_k["pass@1"] * 164}")
+
+            return pass_at_k
+
+        return None

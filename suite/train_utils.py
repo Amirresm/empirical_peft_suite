@@ -1,6 +1,9 @@
-def handle_metrics(trainer, prefix, metrics, sample_count = None):
+from suite.general_utits import log_metrics, save_metrics
+
+
+def handle_metrics(prefix, metrics, output_dir, sample_count = None):
     if sample_count is not None:
         metrics[f"{prefix}_samples"] = sample_count
-    trainer.log_metrics(prefix, metrics)
-    trainer.save_metrics(prefix, metrics)
+    log_metrics(prefix, metrics)
+    save_metrics(prefix, metrics, output_dir)
 

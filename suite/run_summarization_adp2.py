@@ -6,6 +6,8 @@ from adapters import (
     Seq2SeqAdapterTrainer,
 )
 from transformers import (
+    AutoModelForCausalLM,
+    AutoModelForSeq2SeqLM,
     DataCollatorForLanguageModeling,
     DataCollatorForSeq2Seq,
     EarlyStoppingCallback,
@@ -255,7 +257,10 @@ def main():
         column_names = raw_datasets["validation"].column_names
     elif training_args.do_predict:
         column_names = raw_datasets["test"].column_names
-    elif data_args.humaneval_num == 0:
+    elif data_args.humaneval_num > 0:
+        logger.info("Running humaneval")
+        column_names = []
+    else:
         logger.info(
             "There is nothing to do. Please pass `do_train`, `do_eval` and/or `do_predict`."
         )
@@ -625,10 +630,10 @@ def main():
 
         if adapter_args.adapter_config == "advfusion":
             handle_metrics(
-                trainer=trainer,
                 prefix="train_before",
                 metrics=train_result.metrics,
                 sample_count=max_train_samples,
+                output_dir=training_args.output_dir,
             )
             unfreeze_reload_adapter(
                 model,
@@ -644,9 +649,9 @@ def main():
             peak_memory = (torch.cuda.max_memory_allocated() / 1024**2) / 1000
             performance_metrics.update({"peak_memory": peak_memory})
             handle_metrics(
-                trainer=trainer,
                 prefix="performance",
                 metrics=performance_metrics,
+                output_dir=training_args.output_dir,
             )
 
         if not adapter_args.use_adapterhub:
@@ -654,10 +659,10 @@ def main():
             trainer.save_model()
 
         handle_metrics(
-            trainer=trainer,
             prefix="train",
             metrics=train_result.metrics,
             sample_count=max_train_samples,
+            output_dir=training_args.output_dir,
         )
 
         if adapter_args.train_adapter and adapter_args.use_adapterhub:
@@ -698,10 +703,10 @@ def main():
             )
         )
         handle_metrics(
-            trainer=trainer,
             prefix="eval",
             metrics=metrics,
             sample_count=max_eval_samples,
+            output_dir=training_args.output_dir,
         )
 
     # predictions on test set (only for encoder-decoders)
@@ -722,10 +727,10 @@ def main():
         )
 
         handle_metrics(
-            trainer=trainer,
             prefix="predict",
             metrics=predict_results.metrics,
             sample_count=max_predict_samples,
+            output_dir=training_args.output_dir,
         )
 
         labels = predict_results.label_ids
@@ -757,7 +762,7 @@ def main():
             if model_args.generation_output_path is not None
             else training_args.output_dir
         )
-        generation_decoder_only(
+        results = generation_decoder_only(
             model=model,
             tokenizer=tokenizer,
             raw_dataset=raw_datasets["test"],
@@ -773,16 +778,30 @@ def main():
             metric_path=data_args.metric_path,
         )
 
+        handle_metrics(
+            prefix="generate",
+            metrics=results,
+            sample_count=max_predict_samples,
+            output_dir=training_args.output_dir,
+        )
+
     ## Humaneval
     num_samples_per_task = data_args.humaneval_num
     if is_gen_job and num_samples_per_task > 0 and trainer.is_world_process_zero():
         logger.info("*** Humaneval ***")
-        run_humaneval(
+        results = run_humaneval(
             model=model,
             tokenizer=tokenizer,
             num_samples_per_task=num_samples_per_task,
             output_dir=training_args.output_dir,
         )
+
+        if results is not None:
+            handle_metrics(
+                prefix="humaneval",
+                metrics=results,
+                output_dir=training_args.output_dir,
+            )
 
 
 def _mp_fn(index):
