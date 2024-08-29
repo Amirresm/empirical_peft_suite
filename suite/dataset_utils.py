@@ -44,7 +44,6 @@ def load_raw_datasets(
             # token=True if model_args.use_auth_token else None,
         )
 
-
         if isinstance(raw_datasets, DatasetDict):
             if (
                 validation_file
@@ -107,9 +106,17 @@ def get_encoder_decoder_preprocessor(
     def preprocess_encoder_decoder_function(examples):
         inputs, targets = [], []
         for i in range(len(examples[text_column])):
-            if examples[text_column][i] and examples[summary_column][i]:
-                input = examples[text_column][i]
-                target = examples[summary_column][i]
+            if examples[text_column][i] and (
+                summary_column == "NONE" or examples[summary_column][i]
+            ):
+                if summary_column == "NONE":
+                    # Assuming dataset is spp
+                    split_index = find_nth(examples[text_column][i], '"""', 2) + 3
+                    input = examples[text_column][i][:split_index]
+                    target = examples[text_column][i][split_index:]
+                else:
+                    input = examples[text_column][i]
+                    target = examples[summary_column][i]
                 if is_text_tokenized:
                     input = " ".join(input)
                 if is_summary_tokenized:
@@ -249,6 +256,7 @@ def get_decoder_only_preprocessor(
 
     return preprocess_decoder_only_function
 
+
 def get_generation_preprocessor(
     tokenizer,
     text_column,
@@ -300,6 +308,7 @@ def get_generation_preprocessor(
         return tokenized_samples
 
     return generation_preprocess_function
+
 
 def get_text_grouper(block_size: int):
     def group_texts(examples):

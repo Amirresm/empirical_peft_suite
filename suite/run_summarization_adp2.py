@@ -255,21 +255,17 @@ def main():
         column_names = raw_datasets["validation"].column_names
     elif training_args.do_predict:
         column_names = raw_datasets["test"].column_names
-    else:
+    elif data_args.humaneval_num == 0:
         logger.info(
             "There is nothing to do. Please pass `do_train`, `do_eval` and/or `do_predict`."
         )
         return
 
     # Get the column names for input/target.
-    dataset_columns = summarization_name_mapping.get(
-        data_args.dataset_name, None
-    )
+    dataset_columns = summarization_name_mapping.get(data_args.dataset_name, None)
     if data_args.text_column is None:
         text_column = (
-            dataset_columns[0]
-            if dataset_columns is not None
-            else column_names[0]
+            dataset_columns[0] if dataset_columns is not None else column_names[0]
         )
     else:
         text_column = data_args.text_column
@@ -279,9 +275,7 @@ def main():
             )
     if data_args.summary_column is None:
         summary_column = (
-            dataset_columns[1]
-            if dataset_columns is not None
-            else column_names[1]
+            dataset_columns[1] if dataset_columns is not None else column_names[1]
         )
     else:
         summary_column = data_args.summary_column
@@ -290,9 +284,7 @@ def main():
         #         f"--summary_column' value '{data_args.summary_column}' needs to be one of: {', '.join(column_names)}"
         #     )
 
-    prefix = (
-        data_args.source_prefix if data_args.source_prefix is not None else ""
-    )
+    prefix = data_args.source_prefix if data_args.source_prefix is not None else ""
 
     # Preprocessing the datasets.
     # filter_dataset(
@@ -371,13 +363,9 @@ def main():
             raise ValueError("--do_train requires a train dataset")
         train_dataset = raw_datasets["train"]
         if data_args.max_train_samples is not None:
-            max_train_samples = min(
-                len(train_dataset), data_args.max_train_samples
-            )
+            max_train_samples = min(len(train_dataset), data_args.max_train_samples)
             train_dataset = train_dataset.select(range(max_train_samples))
-        with training_args.main_process_first(
-            desc="train dataset map pre-processing"
-        ):
+        with training_args.main_process_first(desc="train dataset map pre-processing"):
             train_dataset = train_dataset.map(
                 preprocess_function,
                 batched=True,
@@ -412,9 +400,7 @@ def main():
             #     block_size = min(data_args.block_size, tokenizer.model_max_length)
 
             group_texts = get_text_grouper(block_size)
-            with training_args.main_process_first(
-                desc="grouping texts together"
-            ):
+            with training_args.main_process_first(desc="grouping texts together"):
                 train_dataset = train_dataset.map(
                     group_texts,
                     batched=True,
@@ -432,9 +418,7 @@ def main():
             raise ValueError("--do_eval requires a validation dataset")
         eval_dataset = raw_datasets["validation"]
         if data_args.max_eval_samples is not None:
-            max_eval_samples = min(
-                len(eval_dataset), data_args.max_eval_samples
-            )
+            max_eval_samples = min(len(eval_dataset), data_args.max_eval_samples)
             eval_dataset = eval_dataset.select(range(max_eval_samples))
         with training_args.main_process_first(
             desc="validation dataset map pre-processing"
@@ -472,9 +456,7 @@ def main():
             #     block_size = min(data_args.block_size, tokenizer.model_max_length)
 
             group_texts = get_text_grouper(block_size)
-            with training_args.main_process_first(
-                desc="grouping texts together"
-            ):
+            with training_args.main_process_first(desc="grouping texts together"):
                 eval_dataset = eval_dataset.map(
                     group_texts,
                     batched=True,
@@ -515,9 +497,7 @@ def main():
             raise ValueError("Generation requires a test dataset")
         generation_dataset = raw_datasets["test"]
         if data_args.max_predict_samples is not None:
-            generation_dataset = generation_dataset.select(
-                range(max_predict_samples)
-            )
+            generation_dataset = generation_dataset.select(range(max_predict_samples))
         with training_args.main_process_first(
             desc="generation dataset map pre-processing"
         ):
@@ -571,9 +551,7 @@ def main():
     # sft_trainer: SFTTrainer | None = None
     if training_args.do_train or training_args.do_eval:
         if adapter_args.train_adapter and adapter_args.use_adapterhub:
-            trainer_class = (
-                AdapterTrainer if is_decoder_only else Seq2SeqAdapterTrainer
-            )
+            trainer_class = AdapterTrainer if is_decoder_only else Seq2SeqAdapterTrainer
         else:
             trainer_class = Trainer if is_decoder_only else Seq2SeqTrainer
 
@@ -618,9 +596,7 @@ def main():
             logger.info(
                 f"metric for choosing best model is {training_args.metric_for_best_model}"
             )
-            callback = EarlyStoppingCallback(
-                early_stopping_patience=data_args.patience
-            )
+            callback = EarlyStoppingCallback(early_stopping_patience=data_args.patience)
             trainer.add_callback(callback)
             training_args.load_best_model_at_end = True
 
@@ -638,9 +614,7 @@ def main():
             checkpoint = last_checkpoint
 
         if adapter_args.adapter_config == "advfusion":
-            zero_freeze_adapter(
-                model, advfusion_args.target_adapter_name, model_dtype
-            )
+            zero_freeze_adapter(model, advfusion_args.target_adapter_name, model_dtype)
 
         timer = CudaTimer()
         timer.start()
@@ -739,18 +713,11 @@ def main():
         logger.info("*** Predict ***")
 
         if not is_decoder_only:
-            predict_results = (
-                trainer.predict(
-                    predict_dataset,
-                    metric_key_prefix="predict",
-                )
-                if is_decoder_only
-                else trainer.predict(
-                    predict_dataset,
-                    metric_key_prefix="predict",
-                    max_length=max_length,
-                    # num_beams=num_beams,
-                )
+            predict_results = trainer.predict(
+                predict_dataset,
+                metric_key_prefix="predict",
+                max_length=max_length,
+                # num_beams=num_beams,
             )
 
             handle_metrics(
@@ -808,14 +775,15 @@ def main():
                     metric_path=data_args.metric_path,
                 )
 
-            num_samples_per_task = data_args.humaneval_num
-            if is_gen_job and num_samples_per_task > 0:
-                run_humaneval(
-                    model=model,
-                    tokenizer=tokenizer,
-                    num_samples_per_task=num_samples_per_task,
-                    output_dir=training_args.output_dir,
-                )
+    ## Humaneval
+    num_samples_per_task = data_args.humaneval_num
+    if is_gen_job and num_samples_per_task > 0:
+        run_humaneval(
+            model=model,
+            tokenizer=tokenizer,
+            num_samples_per_task=num_samples_per_task,
+            output_dir=training_args.output_dir,
+        )
         # if trainer.is_world_process_zero():
         #     source = raw_datasets["test"].select(
         #         # range(min(max_predict_samples, len(predict_dataset)))
