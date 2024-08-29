@@ -102,6 +102,10 @@ def main():
     logger.info(f"Adapter parameters {adapter_args}\n")
     logger.info(f"Data parameters {data_args}\n")
     logger.info(f"Model parameters {model_args}\n")
+    if adapter_args.use_adapterhub:
+        logger.info("Adapter mode: Using AdapterHub...")
+    else:
+        logger.info("Adapter mode: Using Peft Library...")
 
     if data_args.source_prefix is None and (
         model_args.model_name_or_path.startswith("t5")
@@ -226,6 +230,7 @@ def main():
                     adapter_config=adapter_args.adapter_config,
                     config_title=model_args.config_title,
                     model=model,
+                    is_decoder_only=is_decoder_only,
                 )
             logger.info("Adapter Summary:\n")
             model.print_trainable_parameters()
@@ -455,7 +460,7 @@ def main():
     )
 
     # Initialize our Trainer
-    trainer: Trainer = Trainer(model=model)
+    trainer: Trainer | None = None
 
     # use_sft = False
     # sft_trainer: SFTTrainer | None = None
@@ -526,6 +531,7 @@ def main():
         if adapter_args.adapter_config == "advfusion":
             zero_freeze_adapter(model, advfusion_args.target_adapter_name, model_dtype)
 
+        torch.cuda.empty_cache()
         timer = CudaTimer()
         timer.start()
         # if sft_trainer is not None:
@@ -601,6 +607,8 @@ def main():
         and max_eval_samples > 0
     ):
         logger.info("*** Evaluate ***")
+
+        torch.cuda.empty_cache()
         timer = CudaTimer()
         timer.start()
         metrics = (
@@ -642,6 +650,7 @@ def main():
     ):
         logger.info("*** Predict ***")
 
+        torch.cuda.empty_cache()
         timer = CudaTimer()
         timer.start()
         predict_results = trainer.predict(
@@ -693,13 +702,15 @@ def main():
                 )
 
     # generations on test set
-    if training_args.predict_with_generate and trainer.is_world_process_zero():
+    if training_args.predict_with_generate:
         logger.info("*** Generate ***")
         generation_save_dir = (
             model_args.generation_output_path
             if model_args.generation_output_path is not None
             else training_args.output_dir
         )
+
+        torch.cuda.empty_cache()
         timer = CudaTimer()
         timer.start()
         results = generation_decoder_only(
@@ -727,7 +738,6 @@ def main():
                 prefix="generate_performance",
                 metrics=performance_metrics,
                 output_dir=training_args.output_dir,
-                trainer=trainer,
             )
         handle_metrics(
             prefix="generate",
@@ -738,8 +748,10 @@ def main():
 
     ## Humaneval
     num_samples_per_task = data_args.humaneval_num
-    if is_gen_job and num_samples_per_task > 0 and trainer.is_world_process_zero():
+    if is_gen_job and num_samples_per_task > 0:
         logger.info("*** Humaneval ***")
+
+        torch.cuda.empty_cache()
         timer = CudaTimer()
         timer.start()
         results = run_humaneval(

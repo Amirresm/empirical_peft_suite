@@ -9,10 +9,10 @@ def get_ah_config(adapter_config):
     match adapter_config:
         case "compacter":
             return adapters.CompacterConfig(
-                phm_dim=64,
-                phm_rank=32,
-                mh_adapter=True,
-                output_adapter=True,
+                # phm_dim=64,
+                # phm_rank=32,
+                # mh_adapter=True,
+                # output_adapter=True,
             )
 
         case "ia3":
@@ -20,8 +20,8 @@ def get_ah_config(adapter_config):
 
         case "lora":
             return adapters.LoRAConfig(
-                r=64,
-                alpha=32,
+                r=8,
+                alpha=8,
                 dropout=0.1,
                 attn_matrices=["q", "k", "v"],
             )

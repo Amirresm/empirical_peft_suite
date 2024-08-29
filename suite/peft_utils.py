@@ -7,8 +7,8 @@ def get_peft_config(adapter_config, is_decoder_only=False):
     match adapter_config:
         case "lora":
             return peft.LoraConfig(
-                r=64,
-                lora_alpha=32,
+                r=8,
+                lora_alpha=8,
                 lora_dropout=0.1,
                 # bias="none",
                 target_modules=["q_proj", "k_proj", "v_proj"]
@@ -25,7 +25,9 @@ def get_peft_config(adapter_config, is_decoder_only=False):
                 target_modules=["q_proj", "k_proj", "v_proj", "down_proj"]
                 if is_decoder_only
                 else ["q", "k", "v", "o"],
-                feedforward_modules=["down_proj"],
+                feedforward_modules=["q_proj", "k_proj", "v_proj", "down_proj"]
+                if is_decoder_only
+                else ["q", "k", "v", "o"],
                 task_type="CAUSAL_LM",
             )
 
@@ -42,7 +44,7 @@ def init_peft_adapter(adapter_config, config_title, model, is_decoder_only=False
             model,
             peft_config,
             adapter_name=adapter_name,
-            # autocast_adapter_dtype=False,
+            autocast_adapter_dtype=False,
         )
         return model
     else:
