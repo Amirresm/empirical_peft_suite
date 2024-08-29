@@ -56,7 +56,7 @@ def spp_split(input):
     return prompt, completion
 
 def csn_split(input):
-    splits = input.split("# summarize:")
+    splits = input.split("# summary:")
     prompt = splits[0].strip()
     if len(splits) == 1:
         return prompt, ""

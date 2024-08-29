@@ -112,7 +112,7 @@ def generation_decoder_only(
         if summary_column == "NONE":
             input, target = spp_split(input)
         else:
-            input = f"# code:\n{input}\n# summarize:\n"
+            input = f"# code:\n{input}\n# summary:\n"
             target = target
 
         prompts.append(input)
@@ -198,6 +198,12 @@ def generation_decoder_only(
         metric_path,
         tokenizer.pad_token_id,
     )
+    # add generate prefix to keys in results
+    res = {}
+    for key in results.keys():
+        res[f"generate_{key}"] = results[key]
+
+    results = res
     logger.info(f"Generation Results:\n{results}")
 
     return results
@@ -269,17 +275,24 @@ def run_humaneval(model, tokenizer, num_samples_per_task, output_dir, calc_passk
         )
 
         if calc_passk:
-            pass_at_k = evaluate_functional_correctness(
+            results = evaluate_functional_correctness(
                 sample_file=out_path,
                 # k=[1, 10, 100],
                 # n_workers=4,
                 # timeout=3.0,
             )
-            pass_at_k["pass@1_count"] = pass_at_k["pass@1"] * 164
+            results["pass@1_count"] = results["pass@1"] * 164
 
-            logger.info(f"Pass@k: {pass_at_k}")
-            logger.info(f"Correct count {pass_at_k["pass@1"] * 164}")
+            logger.info(f"Correct count {results["pass@1"] * 164}")
 
-            return pass_at_k
+            # add humaneval prefix to keys in results
+            res = {}
+            for key in results.keys():
+                # results[f"humaneval_{num_samples_per_task}_{key}"] = results[key]
+                res[f"humaneval_{key}"] = results[key]
+
+            results = res
+            logger.info(f"Pass@k: {results}")
+            return results
 
         return None

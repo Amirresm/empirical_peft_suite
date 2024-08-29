@@ -231,8 +231,8 @@ def main():
             model.print_trainable_parameters()
             if hasattr(model, "get_model_status") and callable(model.get_model_status):
                 logger.info(f"Model Status:\n{model.get_model_status()}")
-            if hasattr(model, "get_layer_status") and callable(model.get_layer_status):
-                logger.info(f"Layer Status:\n{model.get_layer_status()}")
+            # if hasattr(model, "get_layer_status") and callable(model.get_layer_status):
+            #     logger.info(f"Layer Status:\n{model.get_layer_status()}")
 
     if is_decoder_only:
         ensure_decoder_only_padding_token(model=model, tokenizer=tokenizer)
@@ -551,11 +551,11 @@ def main():
         elapsed = timer.stop()
         if elapsed is not None:
             performance_metrics = {}
-            performance_metrics.update({"total_gpu_time": elapsed})
+            performance_metrics.update({"train_total_gpu_time": elapsed})
             peak_memory = (torch.cuda.max_memory_allocated() / 1024**2) / 1000
-            performance_metrics.update({"peak_memory": peak_memory})
+            performance_metrics.update({"train_peak_memory": peak_memory})
             handle_metrics(
-                prefix="performance",
+                prefix="train_performance",
                 metrics=performance_metrics,
                 output_dir=training_args.output_dir,
                 trainer=trainer,
@@ -601,6 +601,8 @@ def main():
         and max_eval_samples > 0
     ):
         logger.info("*** Evaluate ***")
+        timer = CudaTimer()
+        timer.start()
         metrics = (
             trainer.evaluate(metric_key_prefix="eval")
             if is_decoder_only
@@ -610,6 +612,18 @@ def main():
                 # num_beams=num_beams,
             )
         )
+        elapsed = timer.stop()
+        if elapsed is not None:
+            performance_metrics = {}
+            performance_metrics.update({"eval_total_gpu_time": elapsed})
+            peak_memory = (torch.cuda.max_memory_allocated() / 1024**2) / 1000
+            performance_metrics.update({"eval_peak_memory": peak_memory})
+            handle_metrics(
+                prefix="eval_performance",
+                metrics=performance_metrics,
+                output_dir=training_args.output_dir,
+                trainer=trainer,
+            )
         handle_metrics(
             prefix="eval",
             metrics=metrics,
@@ -628,12 +642,26 @@ def main():
     ):
         logger.info("*** Predict ***")
 
+        timer = CudaTimer()
+        timer.start()
         predict_results = trainer.predict(
             predict_dataset,
             metric_key_prefix="predict",
             max_length=max_length,
             # num_beams=num_beams,
         )
+        elapsed = timer.stop()
+        if elapsed is not None:
+            performance_metrics = {}
+            performance_metrics.update({"predict_total_gpu_time": elapsed})
+            peak_memory = (torch.cuda.max_memory_allocated() / 1024**2) / 1000
+            performance_metrics.update({"predict_peak_memory": peak_memory})
+            handle_metrics(
+                prefix="predict_performance",
+                metrics=performance_metrics,
+                output_dir=training_args.output_dir,
+                trainer=trainer,
+            )
 
         handle_metrics(
             prefix="predict",
@@ -672,6 +700,8 @@ def main():
             if model_args.generation_output_path is not None
             else training_args.output_dir
         )
+        timer = CudaTimer()
+        timer.start()
         results = generation_decoder_only(
             model=model,
             tokenizer=tokenizer,
@@ -687,7 +717,18 @@ def main():
             metric_bleu=metric_bleu,
             metric_path=data_args.metric_path,
         )
-
+        elapsed = timer.stop()
+        if elapsed is not None:
+            performance_metrics = {}
+            performance_metrics.update({"generate_total_gpu_time": elapsed})
+            peak_memory = (torch.cuda.max_memory_allocated() / 1024**2) / 1000
+            performance_metrics.update({"generate_peak_memory": peak_memory})
+            handle_metrics(
+                prefix="generate_performance",
+                metrics=performance_metrics,
+                output_dir=training_args.output_dir,
+                trainer=trainer,
+            )
         handle_metrics(
             prefix="generate",
             metrics=results,
@@ -699,13 +740,26 @@ def main():
     num_samples_per_task = data_args.humaneval_num
     if is_gen_job and num_samples_per_task > 0 and trainer.is_world_process_zero():
         logger.info("*** Humaneval ***")
+        timer = CudaTimer()
+        timer.start()
         results = run_humaneval(
             model=model,
             tokenizer=tokenizer,
             num_samples_per_task=num_samples_per_task,
             output_dir=training_args.output_dir,
         )
-
+        elapsed = timer.stop()
+        if elapsed is not None:
+            performance_metrics = {}
+            performance_metrics.update({"humaneval_total_gpu_time": elapsed})
+            peak_memory = (torch.cuda.max_memory_allocated() / 1024**2) / 1000
+            performance_metrics.update({"humaneval_peak_memory": peak_memory})
+            handle_metrics(
+                prefix="humaneval_performance",
+                metrics=performance_metrics,
+                output_dir=training_args.output_dir,
+                trainer=trainer,
+            )
         if results is not None:
             handle_metrics(
                 prefix="humaneval",

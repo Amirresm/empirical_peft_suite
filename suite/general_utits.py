@@ -131,8 +131,8 @@ def log_metrics(split, metrics):
         print(f"  {key: <{k_width}} = {metrics_formatted[key]:>{v_width}}")
 
 def save_metrics(split, metrics, output_dir, combined=True):
-    output_dir = os.path.join(output_dir, f"{split}_results.json")
-    with open(output_dir, "w") as f:
+    output_path = os.path.join(output_dir, f"{split}_results.json")
+    with open(output_path, "w") as f:
         json.dump(metrics, f, indent=4, sort_keys=True)
 
     if combined:

@@ -3,7 +3,7 @@ from logging_utils import logger
 import peft
 
 
-def get_peft_config(adapter_config):
+def get_peft_config(adapter_config, is_decoder_only=False):
     match adapter_config:
         case "lora":
             return peft.LoraConfig(
@@ -11,7 +11,9 @@ def get_peft_config(adapter_config):
                 lora_alpha=32,
                 lora_dropout=0.1,
                 # bias="none",
-                target_modules=["q_proj", "k_proj", "v_proj"],
+                target_modules=["q_proj", "k_proj", "v_proj"]
+                if is_decoder_only
+                else ["q", "k", "v"],
                 task_type="CAUSAL_LM",
             )
 
@@ -20,7 +22,9 @@ def get_peft_config(adapter_config):
                 # r=64,
                 # lora_alpha=32,
                 # lora_dropout=0.1,
-                target_modules=["q_proj", "k_proj", "v_proj", "down_proj"],
+                target_modules=["q_proj", "k_proj", "v_proj", "down_proj"]
+                if is_decoder_only
+                else ["q", "k", "v", "o"],
                 feedforward_modules=["down_proj"],
                 task_type="CAUSAL_LM",
             )
@@ -29,8 +33,8 @@ def get_peft_config(adapter_config):
             return None
 
 
-def init_peft_adapter(adapter_config, config_title, model):
-    peft_config = get_peft_config(adapter_config)
+def init_peft_adapter(adapter_config, config_title, model, is_decoder_only=False):
+    peft_config = get_peft_config(adapter_config, is_decoder_only=is_decoder_only)
     if peft_config is not None:
         adapter_name = f"{config_title}_adapter"
         logger.info(f"Setting a new PEFT titled {adapter_name}")
@@ -42,7 +46,9 @@ def init_peft_adapter(adapter_config, config_title, model):
         )
         return model
     else:
-        logger.warning(f"Failed to init peft adapter: Invalid PEFT config: {adapter_config}")
+        logger.warning(
+            f"Failed to init peft adapter: Invalid PEFT config: {adapter_config}"
+        )
         raise ValueError(f"Invalid PEFT config: {adapter_config}")
 
 
@@ -58,6 +64,7 @@ def init_and_load_peft_adapter(adapter_path, config_title, model, device=None):
             torch_device=device,
         )
     else:
-        logger.warning(f"Failed to load peft adapter: Invalid PEFT path: {adapter_path}")
+        logger.warning(
+            f"Failed to load peft adapter: Invalid PEFT path: {adapter_path}"
+        )
         raise ValueError(f"Invalid PEFT path: {adapter_path}")
-

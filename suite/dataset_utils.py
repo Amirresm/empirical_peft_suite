@@ -123,7 +123,7 @@ def get_encoder_decoder_preprocessor(
                     target = " ".join(target)
                 inputs.append(input)
                 targets.append(target)
-        inputs = [prefix + inp for inp in inputs]
+        # inputs = [prefix + inp for inp in inputs]
         model_inputs = tokenizer(
             inputs,
             max_length=max_source_length,
@@ -231,7 +231,7 @@ def get_decoder_only_preprocessor(
                 # input = 'def '.join(input.split('def ')[:2])
 
                 if target is not None:
-                    input = f"# code:\n{input}\n# summarize:\n{target}"
+                    input = f"# code:\n{input}\n# summary:\n{target}"
                 sample = create_llama_prompt(
                     input, is_training=True, eos_token=tokenizer.eos_token
                 )
