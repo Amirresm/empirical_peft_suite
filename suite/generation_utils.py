@@ -283,8 +283,6 @@ def run_humaneval(model, tokenizer, num_samples_per_task, output_dir, calc_passk
             )
             results["pass@1_count"] = results["pass@1"] * 164
 
-            logger.info(f"Correct count {results["pass@1"] * 164}")
-
             # add humaneval prefix to keys in results
             res = {}
             for key in results.keys():
