@@ -120,12 +120,19 @@ def generation_decoder_only(
     outputs = []
     token_counts = []
     batch_size = 4
-    for i in range((len(prompts) // batch_size) + 1):
+    loop_range = (
+        len(prompts) // batch_size
+        if len(prompts) % batch_size == 0
+        else (len(prompts) // batch_size) + 1
+    )
+    for i in range(loop_range):
         logger.info(f"Generation progress: {i + 1}/{len(prompts) // batch_size}")
         index = i * batch_size
         end_index = min(index + batch_size, len(prompts))
+        if index >= end_index:
+            break
         prompts_encoded = tokenizer(
-            prompts[index : end_index],
+            prompts[index:end_index],
             return_tensors="pt",
             max_length=max_source_length,
             padding=padding,
@@ -175,7 +182,7 @@ def generation_decoder_only(
 
     output_prediction_file = os.path.join(
         save_path,
-        "generated_predictions.txt",
+        "generated_generations.txt",
     )
     ensure_path_exists(save_path)
     with open(output_prediction_file, "w") as writer:

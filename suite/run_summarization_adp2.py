@@ -545,7 +545,7 @@ def main():
     )
 
     # Initialize our Trainer
-    trainer: Trainer | Seq2SeqTrainer | None = None
+    trainer: Trainer = Trainer()
 
     # use_sft = False
     # sft_trainer: SFTTrainer | None = None
@@ -704,98 +704,85 @@ def main():
             sample_count=max_eval_samples,
         )
 
+    # predictions on test set (only for encoder-decoders)
     if (
-        trainer is not None
+        not is_decoder_only
+        and trainer is not None
         and training_args.do_predict
         and predict_dataset is not None
         and max_predict_samples > 0
     ):
         logger.info("*** Predict ***")
 
-        if not is_decoder_only:
-            predict_results = trainer.predict(
-                predict_dataset,
-                metric_key_prefix="predict",
-                max_length=max_length,
-                # num_beams=num_beams,
-            )
+        predict_results = trainer.predict(
+            predict_dataset,
+            metric_key_prefix="predict",
+            max_length=max_length,
+            # num_beams=num_beams,
+        )
 
-            handle_metrics(
-                trainer=trainer,
-                prefix="predict",
-                metrics=predict_results.metrics,
-                sample_count=max_predict_samples,
-            )
+        handle_metrics(
+            trainer=trainer,
+            prefix="predict",
+            metrics=predict_results.metrics,
+            sample_count=max_predict_samples,
+        )
 
-            labels = predict_results.label_ids
-            preds = predict_results.predictions
+        labels = predict_results.label_ids
+        preds = predict_results.predictions
 
-            if (
-                labels is not None
-                and preds is not None
-                and trainer.is_world_process_zero()
-            ):
-                if training_args.predict_with_generate:
-                    generation_save_dir = (
-                        model_args.generation_output_path
-                        if model_args.generation_output_path is not None
-                        else training_args.output_dir
-                    )
-                    generation_from_predict_encoder_decoder(
-                        tokenizer=tokenizer,
-                        preds=preds,
-                        labels=labels,
-                        raw_dataset=raw_datasets["test"],
-                        tokenized_dataset=predict_dataset,
-                        text_column=text_column,
-                        summary_column=summary_column,
-                        save_path=generation_save_dir,
-                    )
-
-        if is_decoder_only and trainer.is_world_process_zero():
+        if labels is not None and preds is not None and trainer.is_world_process_zero():
             if training_args.predict_with_generate:
                 generation_save_dir = (
                     model_args.generation_output_path
                     if model_args.generation_output_path is not None
                     else training_args.output_dir
                 )
-                generation_decoder_only(
-                    model=model,
+                generation_from_predict_encoder_decoder(
                     tokenizer=tokenizer,
+                    preds=preds,
+                    labels=labels,
                     raw_dataset=raw_datasets["test"],
+                    tokenized_dataset=predict_dataset,
                     text_column=text_column,
                     summary_column=summary_column,
-                    max_predict_samples=max_predict_samples,
-                    max_source_length=data_args.max_source_length,
-                    max_new_tokens=model_args.max_new_tokens,
-                    padding=padding,
                     save_path=generation_save_dir,
-                    metric_rouge=metric_rouge,
-                    metric_bleu=metric_bleu,
-                    metric_path=data_args.metric_path,
                 )
+
+    # generations on test set
+    if training_args.predict_with_generate and trainer.is_world_process_zero():
+        logger.info("*** Generate ***")
+        generation_save_dir = (
+            model_args.generation_output_path
+            if model_args.generation_output_path is not None
+            else training_args.output_dir
+        )
+        generation_decoder_only(
+            model=model,
+            tokenizer=tokenizer,
+            raw_dataset=raw_datasets["test"],
+            text_column=text_column,
+            summary_column=summary_column,
+            max_predict_samples=max_predict_samples,
+            max_source_length=data_args.max_source_length,
+            max_new_tokens=model_args.max_new_tokens,
+            padding=padding,
+            save_path=generation_save_dir,
+            metric_rouge=metric_rouge,
+            metric_bleu=metric_bleu,
+            metric_path=data_args.metric_path,
+        )
 
     ## Humaneval
     num_samples_per_task = data_args.humaneval_num
-    if is_gen_job and num_samples_per_task > 0:
+    if is_gen_job and num_samples_per_task > 0 and trainer.is_world_process_zero():
+        logger.info("*** Humaneval ***")
         run_humaneval(
             model=model,
             tokenizer=tokenizer,
             num_samples_per_task=num_samples_per_task,
             output_dir=training_args.output_dir,
         )
-        # if trainer.is_world_process_zero():
-        #     source = raw_datasets["test"].select(
-        #         # range(min(max_predict_samples, len(predict_dataset)))
-        #         range(10)
-        #     )
-        #     for i, inputs in enumerate(source):
-        #         inputs = "summarize: " + " ".join(inputs["code_tokens"])
-        #         logger.info(f"Input: {inputs}")
-        #         inputs = tokenizer.encode(inputs, return_tensors="pt").to(model.device)
-        #         outputs = model.generate(inputs)
-        #         outputs = tokenizer.decode(outputs[0])
-        #         logger.info(f"Output: {outputs}")
 
 
 def _mp_fn(index):
