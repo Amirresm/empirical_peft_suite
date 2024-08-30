@@ -8,8 +8,8 @@ def get_peft_config(adapter_config, is_decoder_only=False):
         case "lora":
             return peft.LoraConfig(
                 # r=16,
-                # lora_alpha=16,
-                # lora_dropout=0.1,
+                lora_alpha=16,
+                lora_dropout=0.05,
                 # bias="none",
                 target_modules=["q_proj", "k_proj", "v_proj"]
                 if is_decoder_only

@@ -19,10 +19,10 @@ def get_ah_config(adapter_config):
             return adapters.IA3Config()
 
         case "lora":
-            return adapters.LoRAConfig(
+            return adapters.LoRAConfig( # https://www.anyscale.com/blog/fine-tuning-llms-lora-or-full-parameter-an-in-depth-analysis-with-llama-2#hyperparameters
                 # r=16,
-                # alpha=16,
-                # dropout=0.1,
+                alpha=16,
+                dropout=0.05,
                 attn_matrices=["q", "k", "v"],
             )
 
