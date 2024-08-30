@@ -58,7 +58,14 @@ def generation_from_predict_encoder_decoder(
         skip_special_tokens=True,
     )
     pairs = [
-        f"{index + 1}=========\n->Original Input:\n{or_inp}\n->Original Target:\n{or_tgt}\n->Reconstructed Target:\n{orig}\n->Reconstructed Predication:\n{pred}\n->Raw Input:\n{raw_input}\n->Raw Target:\n{raw_label}\n--\n"
+        f"{index + 1}=========\n\
+->Original Input:\n{or_inp}\n\
+->Original Target:\n{or_tgt}\n\
+->Reconstructed Target:\n{orig}\n\
+->Reconstructed Predication:\n{pred}\n\
+->Raw Input:\n{raw_input}\n\
+->Raw Target:\n{raw_label}\n\
+--\n"
         for pred, orig, or_inp, or_tgt, raw_input, raw_label, index in zip(
             preds,
             labels,
@@ -150,6 +157,8 @@ def generation_decoder_only(
                 # do_sample=True,
                 # top_k=50,
                 # top_p=0.95,
+                eos_token_id=tokenizer.eos_token_id,
+                pad_token_id=tokenizer.pad_token_id,
             )
             for i, bo in enumerate(batch_outputs):
                 token_counts.append((len(prompts_encoded[i]), len(bo)))

@@ -153,6 +153,17 @@ def main():
 
     [h.flush() for h in logger.handlers]
 
+    # check if output_dir + all_results.json exists
+    if os.path.exists(os.path.join(training_args.output_dir, "all_results.json")):
+        logger.info(
+            f"all_results.json exists in {training_args.output_dir}, renaming to old_all_results.json"
+        )
+        # rename all_results.json to old_all_results.json
+        os.rename(
+            os.path.join(training_args.output_dir, "all_results.json"),
+            os.path.join(training_args.output_dir, "old_all_results.json"),
+        )
+
     config = init_config(
         config_name=model_args.config_name,
         model_name_or_path=model_args.model_name_or_path,
