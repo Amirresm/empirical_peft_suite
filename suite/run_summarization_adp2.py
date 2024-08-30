@@ -728,6 +728,7 @@ def main():
             metric_bleu=metric_bleu,
             metric_path=data_args.metric_path,
             is_gen_job=is_gen_job,
+            is_decoder_only=is_decoder_only,
         )
         elapsed = timer.stop()
         if elapsed is not None:
@@ -760,6 +761,7 @@ def main():
             tokenizer=tokenizer,
             num_samples_per_task=num_samples_per_task,
             output_dir=training_args.output_dir,
+            is_decoder_only=is_decoder_only,
         )
         elapsed = timer.stop()
         if elapsed is not None:

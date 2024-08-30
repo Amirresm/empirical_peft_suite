@@ -7,28 +7,25 @@ def get_peft_config(adapter_config, is_decoder_only=False):
     match adapter_config:
         case "lora":
             return peft.LoraConfig(
-                r=8,
-                lora_alpha=8,
-                lora_dropout=0.1,
+                # r=16,
+                # lora_alpha=16,
+                # lora_dropout=0.1,
                 # bias="none",
                 target_modules=["q_proj", "k_proj", "v_proj"]
                 if is_decoder_only
                 else ["q", "k", "v"],
-                task_type="CAUSAL_LM",
+                task_type="CAUSAL_LM" if is_decoder_only else "SEQ_2_SEQ_LM",
             )
 
         case "ia3":
             return peft.IA3Config(
-                # r=64,
-                # lora_alpha=32,
-                # lora_dropout=0.1,
-                target_modules=["q_proj", "k_proj", "v_proj", "down_proj"]
+                target_modules=["q_proj", "k_proj", "v_proj"] #"down_proj"
                 if is_decoder_only
-                else ["q", "k", "v", "o"],
-                feedforward_modules=["q_proj", "k_proj", "v_proj", "down_proj"]
-                if is_decoder_only
-                else ["q", "k", "v", "o"],
-                task_type="CAUSAL_LM",
+                else ["q", "k", "v"], #"o"
+                # feedforward_modules=["q_proj", "k_proj", "v_proj", "down_proj"]
+                # if is_decoder_only
+                # else ["q", "k", "v", "o"],
+                task_type="CAUSAL_LM" if is_decoder_only else "SEQ_2_SEQ_LM",
             )
 
         case _:
@@ -40,12 +37,14 @@ def init_peft_adapter(adapter_config, config_title, model, is_decoder_only=False
     if peft_config is not None:
         adapter_name = f"{config_title}_adapter"
         logger.info(f"Setting a new PEFT titled {adapter_name}")
+        device = model.device
         model = peft.get_peft_model(
             model,
             peft_config,
             adapter_name=adapter_name,
             # autocast_adapter_dtype=False,
         )
+        model = model.to(device)
         return model
     else:
         logger.warning(

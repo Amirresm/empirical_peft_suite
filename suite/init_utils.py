@@ -77,7 +77,7 @@ def init_model(
     model_dtype = None
     if quantization_mode == "4bit":
         logger.info("Quantizing model to 4-bit")
-        model_dtype = torch.bfloat16
+        model_dtype = torch.float
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",

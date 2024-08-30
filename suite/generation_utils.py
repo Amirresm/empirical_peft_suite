@@ -39,8 +39,7 @@ def generation_from_predict_encoder_decoder(
     )
     raw_labels = tokenized_dataset["labels"]
     raw_labels = [
-        [tokenizer.pad_token_id if t == -100 else t for t in rl]
-        for rl in raw_labels
+        [tokenizer.pad_token_id if t == -100 else t for t in rl] for rl in raw_labels
     ]
     raw_inputs = tokenizer.batch_decode(
         raw_inputs,
@@ -97,6 +96,7 @@ def generation_decoder_only(
     metric_bleu,
     metric_path,
     is_gen_job=False,
+    is_decoder_only=True,
 ):
     samples = raw_dataset.select(range(max_predict_samples))
     prompts = []
@@ -104,9 +104,7 @@ def generation_decoder_only(
     for i, sample in enumerate(samples):
         input = sample[text_column]
         target = (
-            sample[text_column]
-            if summary_column == "NONE"
-            else sample[summary_column]
+            sample[text_column] if summary_column == "NONE" else sample[summary_column]
         )
         if isinstance(input, list):
             input = " ".join(input)
@@ -124,16 +122,14 @@ def generation_decoder_only(
 
     outputs = []
     token_counts = []
-    batch_size = 4
+    batch_size = 8 if is_decoder_only else 32
     loop_range = (
         len(prompts) // batch_size
         if len(prompts) % batch_size == 0
         else (len(prompts) // batch_size) + 1
     )
     for i in range(loop_range):
-        logger.info(
-            f"Generation progress: {i + 1}/{len(prompts) // batch_size}"
-        )
+        logger.info(f"Generation progress: {i + 1}/{len(prompts) // batch_size}")
         index = i * batch_size
         end_index = min(index + batch_size, len(prompts))
         if index >= end_index:
@@ -167,9 +163,7 @@ def generation_decoder_only(
                     f"{index + i}===\nInput:\n{prompts[index + i]}\nPred:\n{bo}\nGold:\n{targets[index + i]}"
                 )
 
-    preds = process_decoder_only_generation(
-        prompts, outputs, is_gen_job=is_gen_job
-    )
+    preds = process_decoder_only_generation(prompts, outputs, is_gen_job=is_gen_job)
     pairs = [
         f"{index + 1}=========\n\
 ->Prompt:\n{prompt}\n\
@@ -239,50 +233,59 @@ def process_decoder_only_generation(inputs, outputs, is_gen_job=False):
     return preds
 
 
-@torch.inference_mode()
-def generate_batch_completion(
-    model, tokenizer, prompt, batch_size
-) -> list[str]:
-    prompt_input = create_llama_prompt(prompt)
-    input_batch = [prompt_input for _ in range(batch_size)]
-    inputs = tokenizer(input_batch, return_tensors="pt").to(model.device)
+def get_generate_batch_completion(is_decoder_only=True):
+    @torch.inference_mode()
+    def generate_batch_completion(model, tokenizer, prompt, batch_size) -> list[str]:
+        prompt_input = create_llama_prompt(prompt)
+        input_batch = [prompt_input for _ in range(batch_size)]
+        inputs = tokenizer(input_batch, return_tensors="pt").to(model.device)
 
-    generated_ids = model.generate(
-        **inputs,
-        # use_cache=True,
-        max_new_tokens=200,
-        # temperature=1.0,
-        # top_k=50,
-        # top_p=0.95,
-        # do_sample=True,
-        # repetition_penalty=1.1,
-        eos_token_id=tokenizer.eos_token_id,
-        pad_token_id=tokenizer.pad_token_id,
-    )
+        generated_ids = model.generate(
+            **inputs,
+            # use_cache=True,
+            max_new_tokens=200,
+            # temperature=1.0,
+            # top_k=50,
+            # top_p=0.95,
+            # do_sample=True,
+            # repetition_penalty=1.1,
+            eos_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.pad_token_id,
+        )
 
-    batch_completions = tokenizer.batch_decode(
-        generated_ids,
-        skip_special_tokens=True,
-    )
+        batch_completions = tokenizer.batch_decode(
+            generated_ids,
+            skip_special_tokens=True,
+        )
 
-    # res = [filter_code(fix_indents(extract_code(completion))) for completion in batch_completions]
-    res = [fix_indents(completion) for completion in batch_completions]
-    res = batch_completions
-    logger.info(f"Generated completions prompt:\n {prompt}")
-    # logger.info(f"Generated completions raw:\n {batch_completions[0]}")
-    logger.info(f"Generated completions example:\n {res[0]}")
-    return res
+        # res = [filter_code(fix_indents(extract_code(completion))) for completion in batch_completions]
+        res = [fix_indents(completion) for completion in batch_completions]
+        res = batch_completions
+        if not is_decoder_only:
+            res = [f"{input_batch[i]}\n{res[i]}" for i in range(len(res))]
+        logger.info(f"Generated completions prompt:\n {prompt}")
+        # logger.info(f"Generated completions raw:\n {batch_completions[0]}")
+        logger.info(f"Generated completions example:\n {res[0]}")
+        return res
+
+    return generate_batch_completion
 
 
 def run_humaneval(
-    model, tokenizer, num_samples_per_task, output_dir, calc_passk=True
+    model,
+    tokenizer,
+    num_samples_per_task,
+    output_dir,
+    calc_passk=True,
+    is_decoder_only=True,
 ):
     if num_samples_per_task > 0:
         out_path = os.path.join(output_dir, f"humaneval_{num_samples_per_task}")
         os.makedirs(out_path, exist_ok=True)
         out_path = f"{out_path}/eval.jsonl"
-        logger.info(
-            f"Running humaneval-{num_samples_per_task}, output to {out_path}"
+        logger.info(f"Running humaneval-{num_samples_per_task}, output to {out_path}")
+        generate_batch_completion = get_generate_batch_completion(
+            is_decoder_only=is_decoder_only
         )
         run_eval(
             model,

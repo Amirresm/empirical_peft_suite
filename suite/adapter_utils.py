@@ -20,9 +20,9 @@ def get_ah_config(adapter_config):
 
         case "lora":
             return adapters.LoRAConfig(
-                r=8,
-                alpha=8,
-                dropout=0.1,
+                # r=16,
+                # alpha=16,
+                # dropout=0.1,
                 attn_matrices=["q", "k", "v"],
             )
 
