@@ -44,7 +44,7 @@ def init_peft_adapter(adapter_config, config_title, model, is_decoder_only=False
             model,
             peft_config,
             adapter_name=adapter_name,
-            autocast_adapter_dtype=False,
+            # autocast_adapter_dtype=False,
         )
         return model
     else:
