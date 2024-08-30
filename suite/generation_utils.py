@@ -39,7 +39,8 @@ def generation_from_predict_encoder_decoder(
     )
     raw_labels = tokenized_dataset["labels"]
     raw_labels = [
-        [tokenizer.pad_token_id if t == -100 else t for t in rl] for rl in raw_labels
+        [tokenizer.pad_token_id if t == -100 else t for t in rl]
+        for rl in raw_labels
     ]
     raw_inputs = tokenizer.batch_decode(
         raw_inputs,
@@ -95,6 +96,7 @@ def generation_decoder_only(
     metric_rouge,
     metric_bleu,
     metric_path,
+    is_gen_job=False,
 ):
     samples = raw_dataset.select(range(max_predict_samples))
     prompts = []
@@ -102,7 +104,9 @@ def generation_decoder_only(
     for i, sample in enumerate(samples):
         input = sample[text_column]
         target = (
-            sample[text_column] if summary_column == "NONE" else sample[summary_column]
+            sample[text_column]
+            if summary_column == "NONE"
+            else sample[summary_column]
         )
         if isinstance(input, list):
             input = " ".join(input)
@@ -127,7 +131,9 @@ def generation_decoder_only(
         else (len(prompts) // batch_size) + 1
     )
     for i in range(loop_range):
-        logger.info(f"Generation progress: {i + 1}/{len(prompts) // batch_size}")
+        logger.info(
+            f"Generation progress: {i + 1}/{len(prompts) // batch_size}"
+        )
         index = i * batch_size
         end_index = min(index + batch_size, len(prompts))
         if index >= end_index:
@@ -161,7 +167,9 @@ def generation_decoder_only(
                     f"{index + i}===\nInput:\n{prompts[index + i]}\nPred:\n{bo}\nGold:\n{targets[index + i]}"
                 )
 
-    preds = process_decoder_only_generation(prompts, outputs)
+    preds = process_decoder_only_generation(
+        prompts, outputs, is_gen_job=is_gen_job
+    )
     pairs = [
         f"{index + 1}=========\n\
 ->Prompt:\n{prompt}\n\
@@ -209,7 +217,7 @@ def generation_decoder_only(
     return results
 
 
-def process_decoder_only_generation(inputs, outputs):
+def process_decoder_only_generation(inputs, outputs, is_gen_job=False):
     preds = []
     for i in range(len(outputs)):
         input = inputs[i]
@@ -220,13 +228,21 @@ def process_decoder_only_generation(inputs, outputs):
             pred = ""
         else:
             pred = pred[1]
+
+        if pred == "":
+            if is_gen_job:
+                _, pred = spp_split(output)
+            else:
+                _, pred = csn_split(output)
         preds.append(pred)
 
     return preds
 
 
 @torch.inference_mode()
-def generate_batch_completion(model, tokenizer, prompt, batch_size) -> list[str]:
+def generate_batch_completion(
+    model, tokenizer, prompt, batch_size
+) -> list[str]:
     prompt_input = create_llama_prompt(prompt)
     input_batch = [prompt_input for _ in range(batch_size)]
     inputs = tokenizer(input_batch, return_tensors="pt").to(model.device)
@@ -235,11 +251,11 @@ def generate_batch_completion(model, tokenizer, prompt, batch_size) -> list[str]
         **inputs,
         # use_cache=True,
         max_new_tokens=200,
-        temperature=1.0,
-        top_k=50,
-        top_p=0.95,
-        do_sample=True,
-        repetition_penalty=1.1,
+        # temperature=1.0,
+        # top_k=50,
+        # top_p=0.95,
+        # do_sample=True,
+        # repetition_penalty=1.1,
         eos_token_id=tokenizer.eos_token_id,
         pad_token_id=tokenizer.pad_token_id,
     )
@@ -258,12 +274,16 @@ def generate_batch_completion(model, tokenizer, prompt, batch_size) -> list[str]
     return res
 
 
-def run_humaneval(model, tokenizer, num_samples_per_task, output_dir, calc_passk=True):
+def run_humaneval(
+    model, tokenizer, num_samples_per_task, output_dir, calc_passk=True
+):
     if num_samples_per_task > 0:
         out_path = os.path.join(output_dir, f"humaneval_{num_samples_per_task}")
         os.makedirs(out_path, exist_ok=True)
         out_path = f"{out_path}/eval.jsonl"
-        logger.info(f"Running humaneval-{num_samples_per_task}, output to {out_path}")
+        logger.info(
+            f"Running humaneval-{num_samples_per_task}, output to {out_path}"
+        )
         run_eval(
             model,
             tokenizer,

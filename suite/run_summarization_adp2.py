@@ -727,6 +727,7 @@ def main():
             metric_rouge=metric_rouge,
             metric_bleu=metric_bleu,
             metric_path=data_args.metric_path,
+            is_gen_job=is_gen_job,
         )
         elapsed = timer.stop()
         if elapsed is not None:
