@@ -319,16 +319,26 @@ class DataTrainingArguments:
         if self.val_max_target_length is None:
             self.val_max_target_length = self.max_target_length
 
+
 @dataclass
 class AdapterArguments:
-    use_adapterhub: bool = field(default=False, metadata={"help": "Use adapterhub for peft implementation"})
-    train_adapter: bool = field(default=False, metadata={"help": "Train an adapter instead of the full model."})
+    use_adapterhub: bool = field(
+        default=False, metadata={"help": "Use adapterhub for peft implementation"}
+    )
+    train_adapter: bool = field(
+        default=False, metadata={"help": "Train an adapter instead of the full model."}
+    )
     load_adapter: Optional[str] = field(
-        default="", metadata={"help": "Pre-trained adapter module to be loaded from Hub."}
+        default="",
+        metadata={"help": "Pre-trained adapter module to be loaded from Hub."},
     )
     adapter_config: Optional[str] = field(
-        default="seq_bn", metadata={"help": "Adapter configuration. Either a config string or a path to a file."}
+        default="seq_bn",
+        metadata={
+            "help": "Adapter configuration. Either a config string or a path to a file."
+        },
     )
+
 
 @dataclass
 class AdvFusionArguments:
@@ -347,24 +357,50 @@ class AdvFusionArguments:
     )
 
 
-def parse_arguments():
-    parser = HfArgumentParser(
-        (
-            ModelArguments,
-            DataTrainingArguments,
-            Seq2SeqTrainingArguments,
-            AdapterArguments,
-            AdvFusionArguments,
-        )
+@dataclass
+class MiscArguments:
+    """
+    Arguments pertaining to Adversarial Fusion.
+    """
+
+    generation_batch_size: Optional[int] = field(
+        default=8,
+        metadata={"help": ("Generation batch size")},
     )
+
+    humaneval_batch_size: Optional[int] = field(
+        default=8,
+        metadata={"help": ("Humaneval batch size")},
+    )
+
+
+def parse_arguments():
+    parser = HfArgumentParser((
+        ModelArguments,
+        DataTrainingArguments,
+        Seq2SeqTrainingArguments,
+        AdapterArguments,
+        AdvFusionArguments,
+        MiscArguments,
+    ))
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
-        model_args, data_args, training_args, adapter_args, advfusion_args = (
-            parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
-        )
+        (
+            model_args,
+            data_args,
+            training_args,
+            adapter_args,
+            advfusion_args,
+            misc_args,
+        ) = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
     else:
-        model_args, data_args, training_args, adapter_args, advfusion_args = (
-            parser.parse_args_into_dataclasses()
-        )
+        (
+            model_args,
+            data_args,
+            training_args,
+            adapter_args,
+            advfusion_args,
+            misc_args,
+        ) = parser.parse_args_into_dataclasses()
 
     advadp_path_list = []
     if advfusion_args.advfusion_paths:
@@ -374,4 +410,4 @@ def parse_arguments():
 
     advfusion_args.advadp_path_list = advadp_path_list
 
-    return model_args, data_args, training_args, adapter_args, advfusion_args
+    return model_args, data_args, training_args, adapter_args, advfusion_args, misc_args

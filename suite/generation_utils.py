@@ -103,6 +103,7 @@ def generation_decoder_only(
     metric_rouge,
     metric_bleu,
     metric_path,
+    batch_size,
     is_gen_job=False,
     is_decoder_only=True,
 ):
@@ -134,14 +135,13 @@ def generation_decoder_only(
 
     outputs = []
     token_counts = []
-    batch_size = 8 if is_decoder_only else 32
     loop_range = (
         len(prompts) // batch_size
         if len(prompts) % batch_size == 0
         else (len(prompts) // batch_size) + 1
     )
     for i in range(loop_range):
-        logger.info(f"Generation progress: {i + 1}/{len(prompts) // batch_size}")
+        logger.info(f"Generation progress (batch_size={batch_size}): {i + 1}/{loop_range}")
         index = i * batch_size
         end_index = min(index + batch_size, len(prompts))
         if index >= end_index:
@@ -251,10 +251,19 @@ def process_decoder_only_generation(inputs, outputs, is_gen_job, is_decoder_only
 
 def get_generate_batch_completion(max_new_tokens, is_decoder_only):
     @torch.inference_mode()
-    def generate_batch_completion(model, tokenizer, prompt, batch_size) -> list[str]:
-        prompt_input = create_llama_prompt(prompt)
-        input_batch = [prompt_input for _ in range(batch_size)]
-        inputs = tokenizer(input_batch, return_tensors="pt").to(model.device)
+    def generate_batch_completion(model, tokenizer, prompt, do_padding) -> list[str]:
+        print(f"do_padding: {do_padding}")
+        input_batch = [create_llama_prompt(p) for p in prompt]
+        if do_padding:
+            inputs = tokenizer(
+                input_batch,
+                return_tensors="pt",
+                max_length=256,
+                padding="max_length",
+                truncation=True,
+            ).to(model.device)
+        else:
+            inputs = tokenizer(input_batch, return_tensors="pt").to(model.device)
 
         generated_ids = model.generate(
             **inputs,
@@ -279,9 +288,8 @@ def get_generate_batch_completion(max_new_tokens, is_decoder_only):
         res = batch_completions
         if not is_decoder_only:
             res = [f"{input_batch[i]}\n{res[i]}" for i in range(len(res))]
-        logger.info(f"Generated completions prompt:\n {prompt}")
-        # logger.info(f"Generated completions raw:\n {batch_completions[0]}")
-        logger.info(f"Generated completions example:\n {res[0]}")
+        for i in range(len(res)):
+            logger.info(f"=================\n->Prompt:\n{prompt[i]}\n->Completion:\n{res[i]}")
         return res
 
     return generate_batch_completion
@@ -295,6 +303,7 @@ def run_humaneval(
     output_dir,
     is_decoder_only,
     save_path,
+    batch_size,
     calc_passk=True,
 ):
     if num_samples_per_task > 0:
@@ -313,6 +322,7 @@ def run_humaneval(
             generate_batch_completion,
             # True,
             # limit=10,
+            batch_size=batch_size,
         )
 
         pairs = [

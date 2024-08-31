@@ -85,7 +85,7 @@ def main():
 
     torch.cuda.empty_cache()
 
-    model_args, data_args, training_args, adapter_args, advfusion_args = (
+    model_args, data_args, training_args, adapter_args, advfusion_args, misc_args = (
         parse_arguments()
     )
 
@@ -102,6 +102,9 @@ def main():
     logger.info(f"Adapter parameters {adapter_args}\n")
     logger.info(f"Data parameters {data_args}\n")
     logger.info(f"Model parameters {model_args}\n")
+    logger.info(f"AdvFusion parameters {advfusion_args}\n")
+    logger.info(f"Misc parameters {misc_args}\n")
+
     if adapter_args.use_adapterhub:
         logger.info("Adapter mode: Using AdapterHub...")
     else:
@@ -754,6 +757,7 @@ def main():
             metric_path=data_args.metric_path,
             is_gen_job=is_gen_job,
             is_decoder_only=is_decoder_only,
+            batch_size=misc_args.generation_batch_size,
         )
         elapsed = timer.stop()
         if elapsed is not None:
@@ -796,6 +800,7 @@ def main():
             is_decoder_only=is_decoder_only,
             max_new_tokens=model_args.max_new_tokens,
             save_path=generation_save_dir,
+            batch_size=misc_args.humaneval_batch_size,
         )
         elapsed = timer.stop()
         if elapsed is not None:

@@ -8,7 +8,7 @@ import itertools
 import typing
 
 BatchGenerator = typing.Callable[
-    [PreTrainedModel, PreTrainedTokenizer, str, int], list[str]
+    [PreTrainedModel, PreTrainedTokenizer, list[str], bool], list[str]
 ]
 
 
@@ -40,6 +40,7 @@ def run_eval(
     generate_batch_completion: BatchGenerator,
     format_tabs: bool = False,
     limit: int | None = None,
+    batch_size: int = 4,
 ):
     problems = read_problems()
     if limit is not None and limit > 0 and limit < len(problems):
@@ -47,27 +48,39 @@ def run_eval(
 
     # problems = dict(itertools.islice(problems.items(), 20))
     samples = []
-    pbar = tqdm(total=len(problems) * num_samples_per_task)
 
+    batched_problems = [[]]
     for task_id in problems:
         if format_tabs:
             prompt = problems[task_id]["prompt"].replace("    ", "\t")
         else:
             prompt = problems[task_id]["prompt"]
 
-        batch_completions = generate_batch_completion(
-            model, tokenizer, prompt, num_samples_per_task
-        )
+        for _ in range(num_samples_per_task):
+            if len(batched_problems[-1]) < batch_size:
+                batched_problems[-1].append((task_id, prompt))
+            else:
+                batched_problems.append([(task_id, prompt)])
 
-        for sample in batch_completions:
+    pbar = tqdm(total=len(problems) * num_samples_per_task)
+    for batch in batched_problems:
+        batch_problems = [x[1] for x in batch]
+        batch_completions = generate_batch_completion(
+            model,
+            tokenizer,
+            batch_problems,
+            True if num_samples_per_task != batch_size else False,
+        )
+        for i, sample in enumerate(batch_completions):
+            task_id = batch[i][0]
             result = dict(
                 task_id=task_id,
                 completion=sample,
             )
 
             samples += [result]
-
-        pbar.update(num_samples_per_task)
+        pbar.update(len(batch))
+        pbar.set_description(f"Humaneval batch_size={batch_size}")
 
     write_jsonl(out_path, samples)
 
