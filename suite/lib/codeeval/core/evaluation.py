@@ -70,3 +70,5 @@ def run_eval(
         pbar.update(num_samples_per_task)
 
     write_jsonl(out_path, samples)
+
+    return samples

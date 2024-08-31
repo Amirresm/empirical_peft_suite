@@ -45,15 +45,22 @@ def clean_whitespaces_generations(text):
 def find_nth(haystack: str, needle: str, n: int) -> int:
     start = haystack.find(needle)
     while start >= 0 and n > 1:
-        start = haystack.find(needle, start+len(needle))
+        start = haystack.find(needle, start + len(needle))
         n -= 1
     return start
 
-def spp_split(input):
-    idx_split = find_nth(input, '"""', 2) + 3
-    prompt = input[:idx_split]
-    completion = input[idx_split:]
-    return prompt, completion
+
+def join_prefix_prompt(prefix, prompt):
+    return f"{prefix}{prompt}"
+
+
+def csn_create_prompt(input):
+    return f"{input}\n# summary:\n"
+
+
+def csn_join(prompt, completion):
+    return f"{prompt}{completion}"
+
 
 def csn_split(input):
     splits = input.split("# summary:")
@@ -63,3 +70,11 @@ def csn_split(input):
     completion = splits[1]
     return prompt, completion
 
+
+def spp_split(input):
+    idx_split = find_nth(input, '"""', 2) + 3
+    if idx_split == -1:
+        return input, ""
+    prompt = input[:idx_split]
+    completion = input[idx_split:]
+    return prompt, completion

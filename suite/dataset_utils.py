@@ -3,7 +3,14 @@ from itertools import chain
 from datasets import DatasetDict, load_dataset
 from huggingface_hub.constants import typing
 
-from text_utils import create_llama_prompt, find_nth
+from text_utils import (
+    create_llama_prompt,
+    csn_create_prompt,
+    csn_join,
+    find_nth,
+    join_prefix_prompt,
+    spp_split,
+)
 from logging_utils import logger
 
 
@@ -102,28 +109,31 @@ def get_encoder_decoder_preprocessor(
     is_text_tokenized=False,
     is_summary_tokenized=False,
     ignore_pad_token_for_loss=False,
+    is_gen_job=False,
 ):
     def preprocess_encoder_decoder_function(examples):
         inputs, targets = [], []
         for i in range(len(examples[text_column])):
             if examples[text_column][i] and (
-                summary_column == "NONE" or examples[summary_column][i]
+                is_gen_job or summary_column == "NONE" or examples[summary_column][i]
             ):
-                if summary_column == "NONE":
+                if is_gen_job or summary_column == "NONE":
                     # Assuming dataset is spp
-                    split_index = find_nth(examples[text_column][i], '"""', 2) + 3
-                    input = examples[text_column][i][:split_index]
-                    target = examples[text_column][i][split_index:]
+                    input, target = spp_split(examples[text_column][i])
                 else:
                     input = examples[text_column][i]
                     target = examples[summary_column][i]
+
+                # ONLY CSN
                 if is_text_tokenized:
                     input = " ".join(input)
                 if is_summary_tokenized:
                     target = " ".join(target)
+
+                input = join_prefix_prompt(prefix, input)
                 inputs.append(input)
                 targets.append(target)
-        # inputs = [prefix + inp for inp in inputs]
+
         model_inputs = tokenizer(
             inputs,
             max_length=max_source_length,
@@ -152,6 +162,7 @@ def get_encoder_decoder_preprocessor(
     return preprocess_encoder_decoder_function
 
 
+# NOT USED
 def get_decoder_only_preprocessor_depr(
     tokenizer,
     text_column,
@@ -211,27 +222,30 @@ def get_decoder_only_preprocessor(
     padding,
     is_text_tokenized=False,
     is_summary_tokenized=False,
-    ignore_pad_token_for_loss=False,
+    is_gen_job=False,
 ):
     def preprocess_decoder_only_function(examples):
         samples = []
         for i in range(len(examples[text_column])):
             if examples[text_column][i] and (
-                summary_column == "NONE" or examples[summary_column][i]
+                is_gen_job or summary_column == "NONE" or examples[summary_column][i]
             ):
                 input = examples[text_column][i]
                 target = (
-                    None if summary_column == "NONE" else examples[summary_column][i]
+                    None
+                    if is_gen_job or summary_column == "NONE"
+                    else examples[summary_column][i]
                 )
                 if is_text_tokenized:
                     input = " ".join(input)
                 if target and is_summary_tokenized:
                     target = " ".join(target)
 
-                # input = 'def '.join(input.split('def ')[:2])
-
                 if target is not None:
-                    input = f"# code:\n{input}\n# summary:\n{target}"
+                    # we are dealing with CSN
+                    input = csn_join(csn_create_prompt(input), target)
+
+                # llama tokenzier doesn't and eos token
                 sample = create_llama_prompt(
                     input, is_training=True, eos_token=tokenizer.eos_token
                 )
@@ -244,19 +258,12 @@ def get_decoder_only_preprocessor(
             truncation=True,
         )
 
-        # labels = tokenized_samples["input_ids"].copy()
-        # if padding == "max_length" and ignore_pad_token_for_loss:
-        #     labels = [
-        #         [(id if id != tokenizer.pad_token_id else -100) for id in label]
-        #         for label in labels
-        #     ]
-
-        # tokenized_samples["labels"] = labels
         return tokenized_samples
 
     return preprocess_decoder_only_function
 
 
+# NOT USED
 def get_generation_preprocessor(
     tokenizer,
     text_column,
@@ -310,7 +317,11 @@ def get_generation_preprocessor(
     return generation_preprocess_function
 
 
-def get_text_grouper(block_size: int):
+def get_text_grouper(
+    block_size: int,
+    # padding,
+    # ignore_pad_token_for_loss=False,
+):
     def group_texts(examples):
         # Concatenate all texts.
         concatenated_examples = {k: list(chain(*examples[k])) for k in examples.keys()}
@@ -323,7 +334,15 @@ def get_text_grouper(block_size: int):
             k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
             for k, t in concatenated_examples.items()
         }
-        result["labels"] = result["input_ids"].copy()
+        labels = result["input_ids"].copy()
+
+        # if padding == "max_length" and ignore_pad_token_for_loss:
+        #     labels = [
+        #         [(id if id != tokenizer.pad_token_id else -100) for id in label]
+        #         for label in labels
+        #     ]
+
+        result["labels"] = labels
         return result
 
     return group_texts
@@ -357,7 +376,6 @@ def process_dataset(
         )
         logger.info(f"{split}_dataset:\n{dataset}")
         return dataset, max_sample_count
-
 
 
 def group_dataset(
@@ -402,4 +420,3 @@ def group_dataset(
         )
         logger.info(f"grouped dataset:\n{dataset}")
         return dataset
-

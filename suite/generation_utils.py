@@ -11,6 +11,7 @@ from logging_utils import logger
 from text_utils import (
     clean_whitespaces_generations,
     create_llama_prompt,
+    csn_create_prompt,
     csn_split,
     fix_indents,
     spp_split,
@@ -111,17 +112,21 @@ def generation_decoder_only(
     for i, sample in enumerate(samples):
         input = sample[text_column]
         target = (
-            sample[text_column] if summary_column == "NONE" else sample[summary_column]
+            sample[text_column]
+            if is_gen_job or summary_column == "NONE"
+            else sample[summary_column]
         )
         if isinstance(input, list):
             input = " ".join(input)
         if isinstance(target, list):
             target = " ".join(target)
 
-        if summary_column == "NONE":
+        if is_gen_job or summary_column == "NONE":
+            # spp
             input, target = spp_split(input)
         else:
-            input = f"# code:\n{input}\n# summary:\n"
+            # csn
+            input = csn_create_prompt(input)
             target = target
 
         prompts.append(input)
@@ -172,7 +177,9 @@ def generation_decoder_only(
                     f"{index + i}===\nInput:\n{prompts[index + i]}\nPred:\n{bo}\nGold:\n{targets[index + i]}"
                 )
 
-    preds = process_decoder_only_generation(prompts, outputs, is_gen_job=is_gen_job)
+    preds = process_decoder_only_generation(
+        prompts, outputs, is_gen_job=is_gen_job, is_decoder_only=is_decoder_only
+    )
     pairs = [
         f"{index + 1}=========\n\
 ->Prompt:\n{prompt}\n\
@@ -220,29 +227,29 @@ def generation_decoder_only(
     return results
 
 
-def process_decoder_only_generation(inputs, outputs, is_gen_job=False):
+def process_decoder_only_generation(inputs, outputs, is_gen_job, is_decoder_only):
     preds = []
-    for i in range(len(outputs)):
-        input = inputs[i]
-        output = outputs[i]
+    if not is_decoder_only:
+        preds = outputs
+    else:
+        for i in range(len(outputs)):
+            input = inputs[i]
+            output = outputs[i]
 
-        pred = output.split(input)
-        if len(pred) == 1:
-            pred = ""
-        else:
-            pred = pred[1]
-
-        if pred == "":
-            if is_gen_job:
-                _, pred = spp_split(output)
+            pred = output.split(input)
+            if len(pred) == 2:
+                pred = pred[1]
             else:
-                _, pred = csn_split(output)
-        preds.append(pred)
+                if is_gen_job:
+                    _, pred = spp_split(output)
+                else:
+                    _, pred = csn_split(output)
+            preds.append(pred)
 
     return preds
 
 
-def get_generate_batch_completion(is_decoder_only=True):
+def get_generate_batch_completion(max_new_tokens, is_decoder_only):
     @torch.inference_mode()
     def generate_batch_completion(model, tokenizer, prompt, batch_size) -> list[str]:
         prompt_input = create_llama_prompt(prompt)
@@ -284,9 +291,11 @@ def run_humaneval(
     model,
     tokenizer,
     num_samples_per_task,
+    max_new_tokens,
     output_dir,
+    is_decoder_only,
+    save_path,
     calc_passk=True,
-    is_decoder_only=True,
 ):
     if num_samples_per_task > 0:
         out_path = os.path.join(output_dir, f"humaneval_{num_samples_per_task}")
@@ -294,25 +303,68 @@ def run_humaneval(
         out_path = f"{out_path}/eval.jsonl"
         logger.info(f"Running humaneval-{num_samples_per_task}, output to {out_path}")
         generate_batch_completion = get_generate_batch_completion(
-            is_decoder_only=is_decoder_only
+            is_decoder_only=is_decoder_only, max_new_tokens=max_new_tokens
         )
-        run_eval(
+        samples = run_eval(
             model,
             tokenizer,
             num_samples_per_task,
             out_path,
             generate_batch_completion,
-            True,
+            # True,
             # limit=10,
         )
 
+        pairs = [
+            f"{index + 1}=========\n\
+->Task:\n{sample["task_id"]}\n\
+->Completion:\n{sample["completion"]}\n\
+--\n\n"
+            for sample, index in zip(
+                samples,
+                range(len(samples)),
+            )
+        ]
+
+        output_prediction_file = os.path.join(
+            save_path,
+            "generated_humaneval.txt",
+        )
+        ensure_path_exists(save_path)
+        with open(output_prediction_file, "w") as writer:
+            writer.write("\n".join(pairs))
+
+        logger.info(f"{len(pairs)} generations saved to {output_prediction_file}")
+
         if calc_passk:
-            results = evaluate_functional_correctness(
+            results, details = evaluate_functional_correctness(
                 sample_file=out_path,
                 # k=[1, 10, 100],
                 # n_workers=4,
                 # timeout=3.0,
             )
+            pairs = [
+                f"{index + 1}=========\n\
+->Task:\n{sample["task_id"]}\n\
+->Passed:\n{details[sample["task_id"]][0]}\n\
+->Result:\n{details[sample["task_id"]][1]}\n\
+->Completion:\n{sample["completion"]}\n\
+--\n\n"
+                for sample, index in zip(
+                    samples,
+                    range(len(samples)),
+                )
+            ]
+
+            output_prediction_file = os.path.join(
+                save_path,
+                "generated_humaneval.txt",
+            )
+            ensure_path_exists(save_path)
+            with open(output_prediction_file, "w") as writer:
+                writer.write("\n".join(pairs))
+
+            logger.info(f"{len(pairs)} generations saved to {output_prediction_file}")
             results["pass@1_count"] = results["pass@1"] * 164
 
             # add humaneval prefix to keys in results

@@ -125,6 +125,7 @@ def main():
         )
 
     set_seed(training_args.seed)
+
     is_decoder_only = "llama" in model_args.model_name_or_path.lower()
     is_gen_job = (
         data_args.train_file is not None
@@ -348,7 +349,7 @@ def main():
             padding=padding,
             is_text_tokenized=data_args.text_tokenized,
             is_summary_tokenized=data_args.summary_tokenized,
-            ignore_pad_token_for_loss=data_args.ignore_pad_token_for_loss,
+            is_gen_job=is_gen_job,
         )
         if is_decoder_only
         else get_encoder_decoder_preprocessor(
@@ -362,6 +363,7 @@ def main():
             is_text_tokenized=data_args.text_tokenized,
             is_summary_tokenized=data_args.summary_tokenized,
             ignore_pad_token_for_loss=data_args.ignore_pad_token_for_loss,
+            is_gen_job=is_gen_job,
         )
     )
 
@@ -518,7 +520,7 @@ def main():
         #     )
 
         # Early stopping
-        if data_args.patience and data_args.patience > 0:
+        if training_args.do_eval and data_args.patience and data_args.patience > 0:
             logger.info(
                 f"metric for choosing best model is {training_args.metric_for_best_model}"
             )
@@ -543,6 +545,8 @@ def main():
             zero_freeze_adapter(model, advfusion_args.target_adapter_name, model_dtype)
 
         torch.cuda.empty_cache()
+        torch.cuda.reset_max_memory_allocated()
+        torch.cuda.reset_peak_memory_stats()
         timer = CudaTimer()
         timer.start()
         # if sft_trainer is not None:
@@ -620,6 +624,8 @@ def main():
         logger.info("*** Evaluate ***")
 
         torch.cuda.empty_cache()
+        torch.cuda.reset_max_memory_allocated()
+        torch.cuda.reset_peak_memory_stats()
         timer = CudaTimer()
         timer.start()
         metrics = (
@@ -662,6 +668,8 @@ def main():
         logger.info("*** Predict ***")
 
         torch.cuda.empty_cache()
+        torch.cuda.reset_max_memory_allocated()
+        torch.cuda.reset_peak_memory_stats()
         timer = CudaTimer()
         timer.start()
         predict_results = trainer.predict(
@@ -713,7 +721,11 @@ def main():
                 )
 
     # generations on test set
-    if training_args.predict_with_generate:
+    if (
+        training_args.predict_with_generate
+        and predict_dataset is not None
+        and max_predict_samples > 0
+    ):
         logger.info("*** Generate ***")
         generation_save_dir = (
             model_args.generation_output_path
@@ -722,6 +734,8 @@ def main():
         )
 
         torch.cuda.empty_cache()
+        torch.cuda.reset_max_memory_allocated()
+        torch.cuda.reset_peak_memory_stats()
         timer = CudaTimer()
         timer.start()
         results = generation_decoder_only(
@@ -762,9 +776,16 @@ def main():
     ## Humaneval
     num_samples_per_task = data_args.humaneval_num
     if is_gen_job and num_samples_per_task > 0:
+        generation_save_dir = (
+            model_args.generation_output_path
+            if model_args.generation_output_path is not None
+            else training_args.output_dir
+        )
         logger.info("*** Humaneval ***")
 
         torch.cuda.empty_cache()
+        torch.cuda.reset_max_memory_allocated()
+        torch.cuda.reset_peak_memory_stats()
         timer = CudaTimer()
         timer.start()
         results = run_humaneval(
@@ -773,6 +794,8 @@ def main():
             num_samples_per_task=num_samples_per_task,
             output_dir=training_args.output_dir,
             is_decoder_only=is_decoder_only,
+            max_new_tokens=model_args.max_new_tokens,
+            save_path=generation_save_dir,
         )
         elapsed = timer.stop()
         if elapsed is not None:
