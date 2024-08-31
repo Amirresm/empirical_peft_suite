@@ -721,6 +721,7 @@ def main():
                     text_column=text_column,
                     summary_column=summary_column,
                     save_path=generation_save_dir,
+                    is_gen_job=is_gen_job,
                 )
 
     # generations on test set

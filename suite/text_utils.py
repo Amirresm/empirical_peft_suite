@@ -70,6 +70,8 @@ def csn_split(input):
     completion = splits[1]
     return prompt, completion
 
+def spp_join(prompt, completion):
+    return f"{prompt}{completion}"
 
 def spp_split(input):
     idx_split = find_nth(input, '"""', 2) + 3

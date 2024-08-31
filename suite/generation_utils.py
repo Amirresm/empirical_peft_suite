@@ -29,54 +29,93 @@ def generation_from_predict_encoder_decoder(
     text_column,
     summary_column,
     save_path,
+    is_gen_job,
 ):
-    source = raw_dataset.select(range(len(tokenized_dataset)))
-    labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
-    preds = np.where(preds != -100, preds, tokenizer.pad_token_id)
+    samples = raw_dataset.select(range(len(tokenized_dataset)))
+    prompts = []
+    targets = []
+    examples = []
+    for sample in samples:
+        input = sample[text_column]
+        target = (
+            sample[text_column]
+            if is_gen_job or summary_column == "NONE"
+            else sample[summary_column]
+        )
+        if isinstance(input, list):
+            input = " ".join(input)
+        if isinstance(target, list):
+            target = " ".join(target)
 
-    raw_inputs = tokenized_dataset["input_ids"]
+        if is_gen_job or summary_column == "NONE":
+            # spp
+            example = input
+            input, target = spp_split(input)
+        else:
+            # csn
+            input = csn_create_prompt(input)
+            target = target
+            example = csn_join(input, target)
+
+        prompts.append(input)
+        targets.append(target)
+        examples.append(example)
+
     raw_inputs = np.where(
-        raw_inputs != -100,
-        raw_inputs,
+        tokenized_dataset["input_ids"] != -100,
+        tokenized_dataset["input_ids"],
         tokenizer.pad_token_id,
     )
-    raw_labels = tokenized_dataset["labels"]
-    raw_labels = [
-        [tokenizer.pad_token_id if t == -100 else t for t in rl] for rl in raw_labels
-    ]
+    raw_inputs_token_count = []
+    for i in range(len(raw_inputs)):
+        raw_inputs_token_count.append(len(raw_inputs[i]))
+
     raw_inputs = tokenizer.batch_decode(
         raw_inputs,
         skip_special_tokens=True,
     )
-    raw_labels = tokenizer.batch_decode(
-        raw_labels,
-        skip_special_tokens=True,
-    )
+    labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
     labels = tokenizer.batch_decode(
         labels,
         skip_special_tokens=True,
     )
+    preds = np.where(preds != -100, preds, tokenizer.pad_token_id)
+    preds_token_count = []
+    for i in range(len(preds)):
+        preds_token_count.append(len(preds[i]))
+
     preds = tokenizer.batch_decode(
         preds,
         skip_special_tokens=True,
     )
+    outputs = []
+    token_counts = []
+    for i in range(len(preds)):
+        token_counts.append((raw_inputs_token_count[i], preds_token_count[i], -1))
+        if is_gen_job:
+            outputs.append(spp_join(prompts[i], preds[i]))
+        else:
+            outputs.append(csn_join(prompts[i], preds[i]))
     pairs = [
         f"{index + 1}=========\n\
-->Original Input:\n{or_inp}\n\
-->Original Target:\n{or_tgt}\n\
-->Reconstructed Target:\n{orig}\n\
-->Reconstructed Predication:\n{pred}\n\
-->Raw Input:\n{raw_input}\n\
-->Raw Target:\n{raw_label}\n\
---\n"
-        for pred, orig, or_inp, or_tgt, raw_input, raw_label, index in zip(
-            preds,
-            labels,
-            source[text_column],
-            source[text_column],
-            # source[summary_column],
+->Example:\n{example}\n\
+->Prompt:\n{raw_input}\n\
+->Target:\n{label}\n\
+->Pred:\n{pred}\n\
+->Output:\n{output}\n\
+->Inp_Tokens:\n{token_count[0]}\n\
+->Out_Tokens:\n{token_count[1]}\n\
+->New_Tokens:\n{token_count[2]}\n\
+--\n\n"
+        for example, prompt, raw_input, target, label, pred, output, token_count, index in zip(
+            examples,
+            prompts,
             raw_inputs,
-            raw_labels,
+            targets,
+            labels,
+            preds,
+            outputs,
+            token_counts,
             range(len(preds)),
         )
     ]
@@ -113,7 +152,7 @@ def generation_decoder_only(
     prompts = []
     targets = []
     examples = []
-    for i, sample in enumerate(samples):
+    for sample in samples:
         input = sample[text_column]
         target = (
             sample[text_column]
@@ -197,14 +236,14 @@ def generation_decoder_only(
     )
     pairs = [
         f"{index + 1}=========\n\
-->Example:\n{prompt}\n\
+->Example:\n{example}\n\
 ->Prompt:\n{prompt}\n\
 ->Target:\n{target}\n\
 ->Pred:\n{pred}\n\
 ->Output:\n{output}\n\
 ->Inp_Tokens:\n{token_count[0]}\n\
 ->Out_Tokens:\n{token_count[1]}\n\
-->New_Tokens:\n{token_count[1]}\n\
+->New_Tokens:\n{token_count[2]}\n\
 --\n\n"
         for example, prompt, target, pred, output, token_count, index in zip(
             examples,

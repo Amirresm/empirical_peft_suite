@@ -6,10 +6,13 @@ import numpy as np
 
 from text_utils import clean_whitespaces_generations
 
-has_codebleu = False
+# from lib.CodeBLEU.calc_codebleu import calc_codebleu
+# from codebleu import calc_codebleu
+
+has_codebleu = True
+# has_codebleu = False
+# calc_codebleu = None
 # try:
-#     from codebleu import calc_codebleu
-#     has_codebleu = True
 # except ImportError:
 #     print("CodeBLEU not found", flush=True)
 
@@ -209,9 +212,14 @@ def calc_all_metrics(
     if metric_path is not None:
         result = {**result, **result_bleu}
 
-    # if has_codebleu:
+    # logger.info("Calculating CodeBLEU...")
+    # if has_codebleu and calc_codebleu is not None:
+    #     logger.info("Calculated CodeBLEU")
     #     cb_results = calc_codebleu(
-    #         [[l] for l in labels], preds, lang="python"
+    #         [[label] for label in labels],
+    #         preds,
+    #         lang="python",
+    #         weights=(0.25, 0.25, 0.25, 0.25),
     #     )
     #     cb_results["codebleuP"] = cb_results["codebleu"] * 100
     #     result = {**result, **cb_results}
