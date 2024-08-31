@@ -12,8 +12,10 @@ from text_utils import (
     clean_whitespaces_generations,
     create_llama_prompt,
     csn_create_prompt,
+    csn_join,
     csn_split,
     fix_indents,
+    spp_join,
     spp_split,
 )
 
@@ -110,6 +112,7 @@ def generation_decoder_only(
     samples = raw_dataset.select(range(max_predict_samples))
     prompts = []
     targets = []
+    examples = []
     for i, sample in enumerate(samples):
         input = sample[text_column]
         target = (
@@ -124,16 +127,19 @@ def generation_decoder_only(
 
         if is_gen_job or summary_column == "NONE":
             # spp
+            example = input
             input, target = spp_split(input)
         else:
             # csn
             input = csn_create_prompt(input)
             target = target
+            example = csn_join(input, target)
 
         prompts.append(input)
         targets.append(target)
+        examples.append(example)
 
-    outputs = []
+    raw_outputs = []
     token_counts = []
     loop_range = (
         len(prompts) // batch_size
@@ -141,7 +147,9 @@ def generation_decoder_only(
         else (len(prompts) // batch_size) + 1
     )
     for i in range(loop_range):
-        logger.info(f"Generation progress (batch_size={batch_size}): {i + 1}/{loop_range}")
+        logger.info(
+            f"Generation progress (batch_size={batch_size}): {i + 1}/{loop_range}"
+        )
         index = i * batch_size
         end_index = min(index + batch_size, len(prompts))
         if index >= end_index:
@@ -166,36 +174,46 @@ def generation_decoder_only(
                 pad_token_id=tokenizer.pad_token_id,
             )
             for i, bo in enumerate(batch_outputs):
-                token_counts.append((len(prompts_encoded[i]), len(bo)))
+                inp_tokens = len(prompts_encoded[i])
+                out_tokens = len(bo)
+                new_tokens = out_tokens
+                if is_decoder_only:
+                    new_tokens = out_tokens - inp_tokens
+                else:
+                    new_tokens = -1
+                token_counts.append((inp_tokens, out_tokens, new_tokens))
 
             batch_outputs = tokenizer.batch_decode(
                 batch_outputs, skip_special_tokens=True
             )
             for i, bo in enumerate(batch_outputs):
-                outputs.append(bo)
+                raw_outputs.append(bo)
                 logger.info(
                     f"{index + i}===\nInput:\n{prompts[index + i]}\nPred:\n{bo}\nGold:\n{targets[index + i]}"
                 )
 
-    preds = process_decoder_only_generation(
-        prompts, outputs, is_gen_job=is_gen_job, is_decoder_only=is_decoder_only
+    preds, outputs = process_decoder_only_generation(
+        prompts, raw_outputs, is_gen_job=is_gen_job, is_decoder_only=is_decoder_only
     )
     pairs = [
         f"{index + 1}=========\n\
+->Example:\n{prompt}\n\
 ->Prompt:\n{prompt}\n\
 ->Target:\n{target}\n\
 ->Pred:\n{pred}\n\
 ->Output:\n{output}\n\
-->In TCount: {token_count[0]}\n\
-->Out TCount: {token_count[1]}\n\
+->Inp_Tokens:\n{token_count[0]}\n\
+->Out_Tokens:\n{token_count[1]}\n\
+->New_Tokens:\n{token_count[1]}\n\
 --\n\n"
-        for prompt, target, pred, output, token_count, index in zip(
+        for example, prompt, target, pred, output, token_count, index in zip(
+            examples,
             prompts,
             targets,
             preds,
             outputs,
             token_counts,
-            range(len(outputs)),
+            range(len(raw_outputs)),
         )
     ]
 
@@ -227,14 +245,22 @@ def generation_decoder_only(
     return results
 
 
-def process_decoder_only_generation(inputs, outputs, is_gen_job, is_decoder_only):
+def process_decoder_only_generation(prompts, outputs, is_gen_job, is_decoder_only):
     preds = []
+    outs = []
     if not is_decoder_only:
         preds = outputs
+        for i in range(len(outputs)):
+            if is_gen_job:
+                outs.append(spp_join(prompts[i], outputs[i]))
+            else:
+                outs.append(csn_join(prompts[i], outputs[i]))
     else:
         for i in range(len(outputs)):
-            input = inputs[i]
+            input = prompts[i]
             output = outputs[i]
+
+            outs.append(output)
 
             pred = output.split(input)
             if len(pred) == 2:
@@ -246,7 +272,7 @@ def process_decoder_only_generation(inputs, outputs, is_gen_job, is_decoder_only
                     _, pred = csn_split(output)
             preds.append(pred)
 
-    return preds
+    return preds, outs
 
 
 def get_generate_batch_completion(max_new_tokens, is_decoder_only):
@@ -289,7 +315,9 @@ def get_generate_batch_completion(max_new_tokens, is_decoder_only):
         if not is_decoder_only:
             res = [f"{input_batch[i]}\n{res[i]}" for i in range(len(res))]
         for i in range(len(res)):
-            logger.info(f"=================\n->Prompt:\n{prompt[i]}\n->Completion:\n{res[i]}")
+            logger.info(
+                f"=================\n->Prompt:\n{prompt[i]}\n->Completion:\n{res[i]}"
+            )
         return res
 
     return generate_batch_completion
@@ -327,8 +355,8 @@ def run_humaneval(
 
         pairs = [
             f"{index + 1}=========\n\
-->Task:\n{sample["task_id"]}\n\
-->Completion:\n{sample["completion"]}\n\
+->Task:\n{sample['task_id']}\n\
+->Completion:\n{sample['completion']}\n\
 --\n\n"
             for sample, index in zip(
                 samples,
