@@ -422,10 +422,10 @@ def run_humaneval(
             )
             pairs = [
                 f"{index + 1}=========\n\
-->Task:\n{sample["task_id"]}\n\
-->Passed:\n{details[sample["task_id"]][0]}\n\
-->Result:\n{details[sample["task_id"]][1]}\n\
-->Completion:\n{sample["completion"]}\n\
+->Task:\n{sample['task_id']}\n\
+->Passed:\n{details[sample['task_id']][0]}\n\
+->Result:\n{details[sample['task_id']][1]}\n\
+->Completion:\n{sample['completion']}\n\
 --\n\n"
                 for sample, index in zip(
                     samples,
