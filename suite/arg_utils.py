@@ -373,6 +373,11 @@ class MiscArguments:
         metadata={"help": ("Humaneval batch size")},
     )
 
+    humaneval_prompt_mode: Optional[str] = field(
+        default="",
+        metadata={"help": ("Humaneval prompt mode")},
+    )
+
 
 def parse_arguments():
     parser = HfArgumentParser((

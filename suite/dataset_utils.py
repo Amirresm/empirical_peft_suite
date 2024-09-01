@@ -7,7 +7,6 @@ from text_utils import (
     create_llama_prompt,
     csn_create_prompt,
     csn_join,
-    find_nth,
     join_prefix_prompt,
     spp_split,
 )
@@ -246,9 +245,7 @@ def get_decoder_only_preprocessor(
                     input = csn_join(csn_create_prompt(input), target)
 
                 # llama tokenzier doesn't and eos token
-                sample = create_llama_prompt(
-                    input, is_training=True, eos_token=tokenizer.eos_token
-                )
+                sample = f"{input}{tokenizer.eos_token}"
                 samples.append(sample)
 
         tokenized_samples = tokenizer(

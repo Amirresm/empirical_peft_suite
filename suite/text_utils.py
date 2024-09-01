@@ -6,6 +6,18 @@ def create_llama_prompt(
     else:
         return f"[INST] Do not define a function. Do not import anything. Do not write any comments. Generate one line of Python code snippet to satisfy the following description: {input_text}. [/INST] CODE: {target_text}</s>"
 
+def get_humaneval_prompter(mode=None):
+    match mode:
+        case "a":
+            def promptera(prompt):
+                return f"Please write a Python code snippet that satisfies the following description: {prompt}"
+            return promptera
+        case _:
+            def prompter(prompt):
+                return prompt
+            return prompter
+
+
 
 def fix_indents(text: str) -> str:
     return text.replace("\t", "    ")

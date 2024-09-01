@@ -15,6 +15,7 @@ from text_utils import (
     csn_join,
     csn_split,
     fix_indents,
+    get_humaneval_prompter,
     spp_join,
     spp_split,
 )
@@ -314,11 +315,10 @@ def process_decoder_only_generation(prompts, outputs, is_gen_job, is_decoder_onl
     return preds, outs
 
 
-def get_generate_batch_completion(max_new_tokens, is_decoder_only):
+def get_generate_batch_completion(max_new_tokens, is_decoder_only, prompter):
     @torch.inference_mode()
     def generate_batch_completion(model, tokenizer, prompt, do_padding) -> list[str]:
-        print(f"do_padding: {do_padding}")
-        input_batch = [create_llama_prompt(p) for p in prompt]
+        input_batch = [prompter(p) for p in prompt]
         if do_padding:
             inputs = tokenizer(
                 input_batch,
@@ -371,6 +371,7 @@ def run_humaneval(
     is_decoder_only,
     save_path,
     batch_size,
+    prompt_mode,
     calc_passk=True,
 ):
     if num_samples_per_task > 0:
@@ -378,8 +379,11 @@ def run_humaneval(
         os.makedirs(out_path, exist_ok=True)
         out_path = f"{out_path}/eval.jsonl"
         logger.info(f"Running humaneval-{num_samples_per_task}, output to {out_path}")
+        prompter = get_humaneval_prompter(prompt_mode)
         generate_batch_completion = get_generate_batch_completion(
-            is_decoder_only=is_decoder_only, max_new_tokens=max_new_tokens
+            is_decoder_only=is_decoder_only,
+            max_new_tokens=max_new_tokens,
+            prompter=prompter,
         )
         samples = run_eval(
             model,
@@ -387,9 +391,9 @@ def run_humaneval(
             num_samples_per_task,
             out_path,
             generate_batch_completion,
+            batch_size=batch_size,
             # True,
             # limit=10,
-            batch_size=batch_size,
         )
 
         pairs = [

@@ -804,6 +804,7 @@ def main():
             max_new_tokens=model_args.max_new_tokens,
             save_path=generation_save_dir,
             batch_size=misc_args.humaneval_batch_size,
+            prompt_mode=misc_args.humaneval_prompt_mode
         )
         elapsed = timer.stop()
         if elapsed is not None:
