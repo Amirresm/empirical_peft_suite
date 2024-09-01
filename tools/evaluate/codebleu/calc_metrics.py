@@ -30,9 +30,9 @@ def metrics_format(metrics):
     metrics_copy = metrics.copy()
     for k, v in metrics_copy.items():
         if "_mem_" in k:
-            metrics_copy[k] = f"{ v >> 20 }MB"
+            metrics_copy[k] = f"{v >> 20}MB"
         elif k == "total_flos":
-            metrics_copy[k] = f"{ int(v) >> 30 }GF"
+            metrics_copy[k] = f"{int(v) >> 30}GF"
         elif isinstance(metrics_copy[k], float):
             metrics_copy[k] = round(v, 4)
 
@@ -48,7 +48,7 @@ def log_metrics(split, metrics):
         print(f"  {key: <{k_width}} = {metrics_formatted[key]:>{v_width}}")
 
 
-def save_metrics(split, metrics, output_dir, combined=False):
+def save_metrics(split, metrics, output_dir, combined=True):
     output_path = os.path.join(output_dir, f"{split}_codebleu_results.json")
     with open(output_path, "w") as f:
         json.dump(metrics, f, indent=4, sort_keys=True)
@@ -78,7 +78,7 @@ def main():
         parent_dir = os.path.dirname(parent_dir)
         preds, targets = read_generations_from_file2(file)
 
-        results = calc_all_metrics(preds, targets)
+        results = calc_all_metrics(preds, targets, split)
 
         log_metrics(split, results)
 
@@ -125,16 +125,17 @@ def read_generations_from_file2(file, line_limit=1000000):
     return preds, refs
 
 
-def calc_all_metrics(
-    preds,
-    labels,
-):
+def calc_all_metrics(preds, labels, split):
     result = {}
     cb_results = calc_codebleu([[label] for label in labels], preds, lang="python")
     cb_results["codebleuP"] = cb_results["codebleu"] * 100
     result = {**result, **cb_results}
 
-    return result
+    res = {}
+    for k, v in result.items():
+        res[f"{split}_{k}"] = v
+
+    return res
 
 
 if __name__ == "__main__":
