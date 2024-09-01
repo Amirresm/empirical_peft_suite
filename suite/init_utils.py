@@ -70,6 +70,8 @@ def init_model(
     model_name_or_path,
     model_config,
     cache_dir,
+    use_adapterhub,
+    adapter_config,
     quantization_mode=None,
     is_decoder_only=False,
     ):
@@ -78,6 +80,8 @@ def init_model(
     if quantization_mode == "4bit":
         logger.info("Quantizing model to 4-bit")
         model_dtype = torch.bfloat16
+        if not use_adapterhub and adapter_config == "ia3":
+            model_dtype = torch.float
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",

@@ -196,6 +196,8 @@ def main():
         cache_dir=model_args.cache_dir,
         quantization_mode=model_args.quantization_mode,
         is_decoder_only=is_decoder_only,
+        use_adapterhub=adapter_args.use_adapterhub,
+        adapter_config=adapter_args.adapter_config,
     )
 
     # Convert the model into an adapter model
