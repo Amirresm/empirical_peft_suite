@@ -1,3 +1,6 @@
+from constants import DatasetInstances
+
+
 def create_llama_prompt(
     input_text, target_text=None, is_training=False, eos_token="</s>"
 ):
@@ -6,17 +9,21 @@ def create_llama_prompt(
     else:
         return f"[INST] Do not define a function. Do not import anything. Do not write any comments. Generate one line of Python code snippet to satisfy the following description: {input_text}. [/INST] CODE: {target_text}</s>"
 
+
 def get_humaneval_prompter(mode=None):
     match mode:
         case "a":
+
             def promptera(prompt):
                 return f"Please write a Python code snippet that satisfies the following description: {prompt}"
+
             return promptera
         case _:
+
             def prompter(prompt):
                 return prompt
-            return prompter
 
+            return prompter
 
 
 def fix_indents(text: str) -> str:
@@ -78,17 +85,53 @@ def csn_split(input):
     splits = input.split("# summary:")
     prompt = splits[0]
     if len(splits) == 1:
-        return prompt, ""
+        return input, input
     completion = splits[1]
     return prompt, completion
+
+
+def spp_create_prompt(input):
+    return f"{input}"
+
 
 def spp_join(prompt, completion):
     return f"{prompt}{completion}"
 
+
 def spp_split(input):
     idx_split = find_nth(input, '"""', 2) + 3
     if idx_split == -1:
-        return input, ""
+        return input, input
     prompt = input[:idx_split]
     completion = input[idx_split:]
     return prompt, completion
+
+
+def modify_prompt(prompt, ds_type):
+    match ds_type:
+        case DatasetInstances.CSN:
+            return csn_create_prompt(prompt)
+        case DatasetInstances.SPP:
+            return spp_create_prompt(prompt)
+        case _:
+            return prompt
+
+
+def join_columns(prompt, completion, ds_type):
+    match ds_type:
+        case DatasetInstances.CSN:
+            return csn_join(prompt, completion)
+        case DatasetInstances.SPP:
+            return spp_join(prompt, completion)
+        case _:
+            return prompt
+
+
+def split_column(example, ds_type):
+    match ds_type:
+        case DatasetInstances.CSN:
+            return csn_split(example)
+        case DatasetInstances.SPP:
+            return spp_split(example)
+        case _:
+            return example, ""

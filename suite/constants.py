@@ -29,3 +29,19 @@ summarization_name_mapping = {
     "wiki_summary": ("article", "highlights"),
     "multi_news": ("document", "summary"),
 }
+
+
+PROMPT_COL = "prompt"
+COMPLETION_COL = "completion"
+
+
+class DatasetTypes:
+    ONECOL = "ONECOL"
+    TWOCOL = "TWOCOL"
+    UNKNOWN = "UNKNOWN"
+
+
+class DatasetInstances:
+    SPP = "spp"
+    CSN = "csn"
+    UNKNOWN = "unknown"

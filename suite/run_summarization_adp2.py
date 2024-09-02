@@ -27,10 +27,13 @@ from advf_utils import (
     zero_freeze_adapter,
 )
 from arg_utils import parse_arguments
-from constants import summarization_name_mapping
+from constants import (
+    COMPLETION_COL,
+    PROMPT_COL,
+    DatasetInstances,
+)
 from dataset_utils import (
-    get_decoder_only_preprocessor,
-    get_encoder_decoder_preprocessor,
+    get_dataset_metadata,
     group_dataset,
     load_raw_datasets,
     process_dataset,
@@ -130,16 +133,8 @@ def main():
     set_seed(training_args.seed)
 
     is_decoder_only = "llama" in model_args.model_name_or_path.lower()
-    is_gen_job = (
-        data_args.train_file is not None
-        and "spp" in data_args.train_file.lower()
-        or data_args.test_file is not None
-        and "spp" in data_args.test_file.lower()
-        or data_args.validation_file is not None
-        and "spp" in data_args.validation_file.lower()
-    )
 
-    raw_datasets = load_raw_datasets(
+    raw_datasets, ds_type, ds_instance = load_raw_datasets(
         data_args.dataset_name,
         data_args.dataset_config_name,
         data_args.train_file,
@@ -148,12 +143,6 @@ def main():
         training_args.seed,
     )
     logger.info(f"raw_datasets: {raw_datasets}")
-    # if training_args.do_train:
-    #     logger.info(f"First training sample: {raw_datasets['train'][0]}")
-    # if training_args.do_eval:
-    #     logger.info(f"First eval sample: {raw_datasets['validation'][0]}")
-    # if training_args.do_predict:
-    #     logger.info(f"First test sample: {raw_datasets['test'][0]}")
 
     [h.flush() for h in logger.handlers]
 
@@ -180,15 +169,6 @@ def main():
         use_fast_tokenizer=model_args.use_fast_tokenizer,
         cache_dir=model_args.cache_dir,
     )
-
-    if model_args.train_tokenizer and model_args.use_fast_tokenizer:
-        logger.info("Training tokenizer...")
-        training_corpus = get_training_corpus(
-            raw_datasets["train"],
-            [data_args.text_column, data_args.summary_column],
-            1000,
-        )
-        tokenizer = train_tokenizer(tokenizer, training_corpus)
 
     model, model_dtype = init_model(
         model_name_or_path=model_args.model_name_or_path,
@@ -269,46 +249,15 @@ def main():
         max_source_length=data_args.max_source_length,
     )
 
-    # We need to tokenize inputs and targets.
-    if training_args.do_train:
-        column_names = raw_datasets["train"].column_names
-    elif training_args.do_eval:
-        column_names = raw_datasets["validation"].column_names
-    elif training_args.do_predict:
-        column_names = raw_datasets["test"].column_names
-    elif data_args.humaneval_num > 0:
-        logger.info("Running humaneval")
-        column_names = []
-    else:
-        logger.info(
-            "There is nothing to do. Please pass `do_train`, `do_eval` and/or `do_predict`."
-        )
-        return
-
-    # Get the column names for input/target.
-    dataset_columns = summarization_name_mapping.get(data_args.dataset_name, None)
-    if data_args.text_column is None:
-        text_column = (
-            dataset_columns[0] if dataset_columns is not None else column_names[0]
-        )
-    else:
-        text_column = data_args.text_column
-        if text_column not in column_names:
-            raise ValueError(
-                f"--text_column' value '{data_args.text_column}' needs to be one of: {', '.join(column_names)}"
-            )
-    if data_args.summary_column is None:
-        summary_column = (
-            dataset_columns[1] if dataset_columns is not None else column_names[1]
-        )
-    else:
-        summary_column = data_args.summary_column
-        # if summary_column not in column_names:
-        #     raise ValueError(
-        #         f"--summary_column' value '{data_args.summary_column}' needs to be one of: {', '.join(column_names)}"
-        #     )
-
-    prefix = data_args.source_prefix if data_args.source_prefix is not None else ""
+    column_names, text_column, summary_column = get_dataset_metadata(
+        do_train=training_args.do_train,
+        do_eval=training_args.do_eval,
+        do_predict=training_args.do_predict,
+        raw_datasets=raw_datasets,
+        dataset_name=data_args.dataset_name,
+        text_column=data_args.text_column,
+        summary_column=data_args.summary_column,
+    )
 
     # Preprocessing the datasets.
     # filter_dataset(
@@ -345,33 +294,7 @@ def main():
     tokenizer.save_pretrained(model_args.tokenizer_name_or_path)
     logger.info(f"Tokenizer saved to {model_args.tokenizer_name_or_path}")
 
-    preprocess_function = (
-        get_decoder_only_preprocessor(
-            tokenizer=tokenizer,
-            text_column=text_column,
-            summary_column=summary_column,
-            max_source_length=data_args.max_source_length,
-            padding=padding,
-            is_text_tokenized=data_args.text_tokenized,
-            is_summary_tokenized=data_args.summary_tokenized,
-            is_gen_job=is_gen_job,
-        )
-        if is_decoder_only
-        else get_encoder_decoder_preprocessor(
-            tokenizer=tokenizer,
-            text_column=text_column,
-            summary_column=summary_column,
-            prefix=prefix,
-            max_source_length=data_args.max_source_length,
-            max_target_length=max_target_length,
-            padding=padding,
-            is_text_tokenized=data_args.text_tokenized,
-            is_summary_tokenized=data_args.summary_tokenized,
-            ignore_pad_token_for_loss=data_args.ignore_pad_token_for_loss,
-            is_gen_job=is_gen_job,
-        )
-    )
-
+    prefix = data_args.source_prefix if data_args.source_prefix is not None else ""
     max_train_samples = data_args.max_train_samples
     train_dataset = None
     if training_args.do_train:
@@ -382,7 +305,19 @@ def main():
             max_sample_count=max_train_samples,
             column_names=column_names,
             split="train",
-            preprocess_function=preprocess_function,
+            tokenizer=tokenizer,
+            text_column=text_column,
+            summary_column=summary_column,
+            is_text_tokenized=data_args.text_tokenized,
+            is_summary_tokenized=data_args.summary_tokenized,
+            prefix=prefix,
+            ds_type=ds_type,
+            ds_instance=ds_instance,
+            max_source_length=data_args.max_source_length,
+            max_target_length=max_target_length,
+            padding=padding,
+            ignore_pad_token_for_loss=data_args.ignore_pad_token_for_loss,
+            is_decoder_only=is_decoder_only,
             main_process_first=training_args.main_process_first,
             overwrite_cache=data_args.overwrite_cache,
             preprocessing_num_workers=data_args.preprocessing_num_workers,
@@ -410,7 +345,19 @@ def main():
             max_sample_count=max_eval_samples,
             column_names=column_names,
             split="validation",
-            preprocess_function=preprocess_function,
+            tokenizer=tokenizer,
+            text_column=text_column,
+            summary_column=summary_column,
+            is_text_tokenized=data_args.text_tokenized,
+            is_summary_tokenized=data_args.summary_tokenized,
+            prefix=prefix,
+            ds_type=ds_type,
+            ds_instance=ds_instance,
+            max_source_length=data_args.max_source_length,
+            max_target_length=max_target_length,
+            padding=padding,
+            ignore_pad_token_for_loss=data_args.ignore_pad_token_for_loss,
+            is_decoder_only=is_decoder_only,
             main_process_first=training_args.main_process_first,
             overwrite_cache=data_args.overwrite_cache,
             preprocessing_num_workers=data_args.preprocessing_num_workers,
@@ -437,11 +384,32 @@ def main():
             max_sample_count=max_predict_samples,
             column_names=column_names,
             split="test",
-            preprocess_function=preprocess_function,
+            tokenizer=tokenizer,
+            text_column=text_column,
+            summary_column=summary_column,
+            is_text_tokenized=data_args.text_tokenized,
+            is_summary_tokenized=data_args.summary_tokenized,
+            prefix=prefix,
+            ds_type=ds_type,
+            ds_instance=ds_instance,
+            max_source_length=data_args.max_source_length,
+            max_target_length=max_target_length,
+            padding=padding,
+            ignore_pad_token_for_loss=data_args.ignore_pad_token_for_loss,
+            is_decoder_only=is_decoder_only,
             main_process_first=training_args.main_process_first,
             overwrite_cache=data_args.overwrite_cache,
             preprocessing_num_workers=data_args.preprocessing_num_workers,
         )
+
+    if model_args.train_tokenizer and model_args.use_fast_tokenizer:
+        logger.info("Training tokenizer...")
+        training_corpus = get_training_corpus(
+            raw_datasets["train"],
+            [PROMPT_COL, COMPLETION_COL],
+            1000,
+        )
+        tokenizer = train_tokenizer(tokenizer, training_corpus)
 
     # Data collator
     label_pad_token_id = (
@@ -474,6 +442,7 @@ def main():
         metric_rouge=metric_rouge,
         metric_bleu=metric_bleu,
         is_decoder_only=is_decoder_only,
+        ds_instance=ds_instance,
         metric_path=data_args.metric_path,
     )
 
@@ -720,10 +689,8 @@ def main():
                     labels=labels,
                     raw_dataset=raw_datasets["test"],
                     tokenized_dataset=predict_dataset,
-                    text_column=text_column,
-                    summary_column=summary_column,
                     save_path=generation_save_dir,
-                    is_gen_job=is_gen_job,
+                    ds_instance=ds_instance,
                 )
 
     # generations on test set
@@ -748,8 +715,6 @@ def main():
             model=model,
             tokenizer=tokenizer,
             raw_dataset=raw_datasets["test"],
-            text_column=text_column,
-            summary_column=summary_column,
             max_predict_samples=max_predict_samples,
             max_source_length=data_args.max_source_length,
             max_new_tokens=model_args.max_new_tokens,
@@ -758,7 +723,7 @@ def main():
             metric_rouge=metric_rouge,
             metric_bleu=metric_bleu,
             metric_path=data_args.metric_path,
-            is_gen_job=is_gen_job,
+            ds_instance=ds_instance,
             is_decoder_only=is_decoder_only,
             batch_size=misc_args.generation_batch_size,
         )
@@ -782,7 +747,7 @@ def main():
 
     ## Humaneval
     num_samples_per_task = data_args.humaneval_num
-    if is_gen_job and num_samples_per_task > 0:
+    if ds_instance == DatasetInstances.SPP and num_samples_per_task > 0:
         generation_save_dir = (
             model_args.generation_output_path
             if model_args.generation_output_path is not None
@@ -804,7 +769,7 @@ def main():
             max_new_tokens=model_args.max_new_tokens,
             save_path=generation_save_dir,
             batch_size=misc_args.humaneval_batch_size,
-            prompt_mode=misc_args.humaneval_prompt_mode
+            prompt_mode=misc_args.humaneval_prompt_mode,
         )
         elapsed = timer.stop()
         if elapsed is not None:

@@ -2,6 +2,7 @@ import os
 import numpy as np
 import torch
 
+from constants import COMPLETION_COL, PROMPT_COL
 from lib.codeeval.human_eval.evaluation import evaluate_functional_correctness
 from lib.codeeval.core import run_eval
 
@@ -9,15 +10,10 @@ from evaluation_utils import calc_all_metrics
 from general_utits import ensure_path_exists
 from logging_utils import logger
 from text_utils import (
-    clean_whitespaces_generations,
-    create_llama_prompt,
-    csn_create_prompt,
-    csn_join,
-    csn_split,
     fix_indents,
     get_humaneval_prompter,
-    spp_join,
-    spp_split,
+    join_columns,
+    split_column,
 )
 
 
@@ -27,37 +23,17 @@ def generation_from_predict_encoder_decoder(
     labels,
     raw_dataset,
     tokenized_dataset,
-    text_column,
-    summary_column,
     save_path,
-    is_gen_job,
+    ds_instance,
 ):
     samples = raw_dataset.select(range(len(tokenized_dataset)))
     prompts = []
     targets = []
     examples = []
     for sample in samples:
-        input = sample[text_column]
-        target = (
-            sample[text_column]
-            if is_gen_job or summary_column == "NONE"
-            else sample[summary_column]
-        )
-        if isinstance(input, list):
-            input = " ".join(input)
-        if isinstance(target, list):
-            target = " ".join(target)
-
-        if is_gen_job or summary_column == "NONE":
-            # spp
-            example = input
-            input, target = spp_split(input)
-        else:
-            # csn
-            input = csn_create_prompt(input)
-            target = target
-            example = csn_join(input, target)
-
+        prompt = sample[PROMPT_COL]
+        target = sample[COMPLETION_COL]
+        example = join_columns(prompt, target, ds_instance)
         prompts.append(input)
         targets.append(target)
         examples.append(example)
@@ -93,10 +69,8 @@ def generation_from_predict_encoder_decoder(
     token_counts = []
     for i in range(len(preds)):
         token_counts.append((raw_inputs_token_count[i], preds_token_count[i], -1))
-        if is_gen_job:
-            outputs.append(spp_join(prompts[i], preds[i]))
-        else:
-            outputs.append(csn_join(prompts[i], preds[i]))
+        outputs.append(join_columns(raw_inputs[i], preds[i], ds_instance))
+
     pairs = [
         f"{index + 1}=========\n\
 ->Example:\n{example}\n\
@@ -108,11 +82,9 @@ def generation_from_predict_encoder_decoder(
 ->Out_Tokens:\n{token_count[1]}\n\
 ->New_Tokens:\n{token_count[2]}\n\
 --\n\n"
-        for example, prompt, raw_input, target, label, pred, output, token_count, index in zip(
+        for example,  raw_input,  label, pred, output, token_count, index in zip(
             examples,
-            prompts,
             raw_inputs,
-            targets,
             labels,
             preds,
             outputs,
@@ -135,8 +107,6 @@ def generation_decoder_only(
     model,
     tokenizer,
     raw_dataset,
-    text_column,
-    summary_column,
     max_predict_samples,
     max_source_length,
     max_new_tokens,
@@ -146,64 +116,48 @@ def generation_decoder_only(
     metric_bleu,
     metric_path,
     batch_size,
-    is_gen_job=False,
-    is_decoder_only=True,
+    ds_instance,
+    is_decoder_only,
 ):
     samples = raw_dataset.select(range(max_predict_samples))
     prompts = []
     targets = []
     examples = []
     for sample in samples:
-        input = sample[text_column]
-        target = (
-            sample[text_column]
-            if is_gen_job or summary_column == "NONE"
-            else sample[summary_column]
-        )
-        if isinstance(input, list):
-            input = " ".join(input)
-        if isinstance(target, list):
-            target = " ".join(target)
-
-        if is_gen_job or summary_column == "NONE":
-            # spp
-            example = input
-            input, target = spp_split(input)
-        else:
-            # csn
-            input = csn_create_prompt(input)
-            target = target
-            example = csn_join(input, target)
-
-        prompts.append(input)
+        prompt = sample[PROMPT_COL]
+        target = sample[COMPLETION_COL]
+        example = join_columns(prompt, target, ds_instance)
+        prompts.append(prompt)
         targets.append(target)
         examples.append(example)
 
     raw_outputs = []
+    outputs = []
+    preds = []
     token_counts = []
     loop_range = (
         len(prompts) // batch_size
         if len(prompts) % batch_size == 0
         else (len(prompts) // batch_size) + 1
     )
-    for i in range(loop_range):
-        logger.info(
-            f"Generation progress (batch_size={batch_size}): {i + 1}/{loop_range}"
-        )
-        index = i * batch_size
-        end_index = min(index + batch_size, len(prompts))
-        if index >= end_index:
-            break
-        prompts_encoded = tokenizer(
-            prompts[index:end_index],
-            return_tensors="pt",
-            max_length=max_source_length,
-            padding=padding,
-            truncation=True,
-        )
-        prompts_encoded = prompts_encoded.to(model.device)
-        model.eval()
-        with torch.inference_mode(), torch.cuda.amp.autocast():
+    model.eval()
+    with torch.inference_mode(), torch.cuda.amp.autocast():
+        for i in range(loop_range):
+            logger.info(
+                f"Generation progress (batch_size={batch_size}): {i + 1}/{loop_range}"
+            )
+            index = i * batch_size
+            end_index = min(index + batch_size, len(prompts))
+            if index >= end_index:
+                break
+            prompts_encoded = tokenizer(
+                prompts[index:end_index],
+                return_tensors="pt",
+                max_length=max_source_length,
+                padding=padding,
+                truncation=True,
+            )
+            prompts_encoded = prompts_encoded.to(model.device)
             batch_outputs = model.generate(
                 **prompts_encoded,
                 max_new_tokens=max_new_tokens,
@@ -226,15 +180,20 @@ def generation_decoder_only(
             batch_outputs = tokenizer.batch_decode(
                 batch_outputs, skip_special_tokens=True
             )
-            for i, bo in enumerate(batch_outputs):
-                raw_outputs.append(bo)
+            b_preds, b_outputs = process_decoder_only_generation(
+                prompts[index:end_index], batch_outputs, ds_instance=ds_instance, is_decoder_only=is_decoder_only
+            )
+            for i, btch in enumerate(zip(b_preds, b_outputs)):
+                preds.append(btch[0])
+                outputs.append(btch[1])
                 logger.info(
-                    f"{index + i}===\nInput:\n{prompts[index + i]}\nPred:\n{bo}\nGold:\n{targets[index + i]}"
+                    f"{index + i}===\nInput:\n{prompts[index + i]}\nPred:\n{btch[0]}\nGold:\n{targets[index + i]}"
                 )
 
-    preds, outputs = process_decoder_only_generation(
-        prompts, raw_outputs, is_gen_job=is_gen_job, is_decoder_only=is_decoder_only
-    )
+
+    # preds, outputs = process_decoder_only_generation(
+    #     prompts, raw_outputs, ds_instance=ds_instance, is_decoder_only=is_decoder_only
+    # )
     pairs = [
         f"{index + 1}=========\n\
 ->Example:\n{example}\n\
@@ -285,17 +244,10 @@ def generation_decoder_only(
     return results
 
 
-def process_decoder_only_generation(prompts, outputs, is_gen_job, is_decoder_only):
+def process_decoder_only_generation(prompts, outputs, ds_instance, is_decoder_only):
     preds = []
     outs = []
-    if not is_decoder_only:
-        preds = outputs
-        for i in range(len(outputs)):
-            if is_gen_job:
-                outs.append(spp_join(prompts[i], outputs[i]))
-            else:
-                outs.append(csn_join(prompts[i], outputs[i]))
-    else:
+    if is_decoder_only:
         for i in range(len(outputs)):
             input = prompts[i]
             output = outputs[i]
@@ -306,11 +258,12 @@ def process_decoder_only_generation(prompts, outputs, is_gen_job, is_decoder_onl
             if len(pred) == 2:
                 pred = pred[1]
             else:
-                if is_gen_job:
-                    _, pred = spp_split(output)
-                else:
-                    _, pred = csn_split(output)
+                _, pred = split_column(output, ds_instance)
             preds.append(pred)
+    else:
+        preds = outputs
+        for i in range(len(outputs)):
+            outs.append(join_columns(prompts[i], outputs[i], ds_instance))
 
     return preds, outs
 
