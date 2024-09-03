@@ -1,3 +1,4 @@
+from transformers.trainer_utils import Dict
 from .data import write_jsonl, read_problems
 from transformers import (
     PreTrainedModel,
@@ -38,11 +39,12 @@ def run_eval(
     num_samples_per_task: int,
     out_path: str,
     generate_batch_completion: BatchGenerator,
+    problems: Dict[str, Dict],
     format_tabs: bool = False,
     limit: int | None = None,
     batch_size: int = 4,
 ):
-    problems = read_problems()
+    # problems = read_problems()
     if limit is not None and limit > 0 and limit < len(problems):
         problems = dict(itertools.islice(problems.items(), limit))
 

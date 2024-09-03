@@ -1,8 +1,13 @@
+import json
+import gzip
 import os
+from accelerate.utils import tqdm
 import numpy as np
 import torch
+from transformers.trainer_utils import Dict
 
-from constants import COMPLETION_COL, PROMPT_COL
+from constants import COMPLETION_COL, PROMPT_COL, DatasetInstances
+from lib.codeeval.core.data import stream_jsonl
 from lib.codeeval.human_eval.evaluation import evaluate_functional_correctness
 from lib.codeeval.core import run_eval
 
@@ -82,7 +87,7 @@ def generation_from_predict_encoder_decoder(
 ->Out_Tokens:\n{token_count[1]}\n\
 ->New_Tokens:\n{token_count[2]}\n\
 --\n\n"
-        for example,  raw_input,  label, pred, output, token_count, index in zip(
+        for example, raw_input, label, pred, output, token_count, index in zip(
             examples,
             raw_inputs,
             labels,
@@ -181,7 +186,10 @@ def generation_decoder_only(
                 batch_outputs, skip_special_tokens=True
             )
             b_preds, b_outputs = process_decoder_only_generation(
-                prompts[index:end_index], batch_outputs, ds_instance=ds_instance, is_decoder_only=is_decoder_only
+                prompts[index:end_index],
+                batch_outputs,
+                ds_instance=ds_instance,
+                is_decoder_only=is_decoder_only,
             )
             for i, btch in enumerate(zip(b_preds, b_outputs)):
                 preds.append(btch[0])
@@ -189,7 +197,6 @@ def generation_decoder_only(
                 logger.info(
                     f"{index + i}===\nInput:\n{prompts[index + i]}\nPred:\n{btch[0]}\nGold:\n{targets[index + i]}"
                 )
-
 
     # preds, outputs = process_decoder_only_generation(
     #     prompts, raw_outputs, ds_instance=ds_instance, is_decoder_only=is_decoder_only
@@ -268,7 +275,9 @@ def process_decoder_only_generation(prompts, outputs, ds_instance, is_decoder_on
     return preds, outs
 
 
-def get_generate_batch_completion(max_new_tokens, is_decoder_only, prompter):
+def get_generate_batch_completion(
+    max_new_tokens, is_decoder_only, prompter, join_prompt_and_completion
+):
     @torch.inference_mode()
     def generate_batch_completion(model, tokenizer, prompt, do_padding) -> list[str]:
         input_batch = [prompter(p) for p in prompt]
@@ -304,7 +313,7 @@ def get_generate_batch_completion(max_new_tokens, is_decoder_only, prompter):
         # res = [filter_code(fix_indents(extract_code(completion))) for completion in batch_completions]
         res = [fix_indents(completion) for completion in batch_completions]
         res = batch_completions
-        if not is_decoder_only:
+        if join_prompt_and_completion:
             res = [f"{input_batch[i]}\n{res[i]}" for i in range(len(res))]
         for i in range(len(res)):
             logger.info(
@@ -313,6 +322,19 @@ def get_generate_batch_completion(max_new_tokens, is_decoder_only, prompter):
         return res
 
     return generate_batch_completion
+
+
+ROOT = os.path.dirname(os.path.abspath(__file__))
+HUMAN_EVAL = os.path.join(ROOT, "lib", "codeeval", "data", "HumanEval.jsonl.gz")
+HUMAN_EVAL_R = os.path.join(ROOT, "lib", "codeeval", "data", "humaneval-r.jsonl")
+
+
+def read_humaneval_r_problems(evalset_file: str = HUMAN_EVAL_R) -> Dict[str, Dict]:
+    return {task["name"]: task for task in stream_jsonl(evalset_file)}
+
+
+def read_humaneval_problems(evalset_file: str = HUMAN_EVAL) -> Dict[str, Dict]:
+    return {task["task_id"]: task for task in stream_jsonl(evalset_file)}
 
 
 def run_humaneval(
@@ -325,25 +347,40 @@ def run_humaneval(
     save_path,
     batch_size,
     prompt_mode,
+    ds_instance,
     calc_passk=True,
 ):
     if num_samples_per_task > 0:
         out_path = os.path.join(output_dir, f"humaneval_{num_samples_per_task}")
         os.makedirs(out_path, exist_ok=True)
         out_path = f"{out_path}/eval.jsonl"
-        logger.info(f"Running humaneval-{num_samples_per_task}, output to {out_path}")
         prompter = get_humaneval_prompter(prompt_mode)
         generate_batch_completion = get_generate_batch_completion(
             is_decoder_only=is_decoder_only,
             max_new_tokens=max_new_tokens,
             prompter=prompter,
+            join_prompt_and_completion=not is_decoder_only
+            and ds_instance != DatasetInstances.MULTIPLT,
         )
+
+        if ds_instance == DatasetInstances.MULTIPLT:
+            problems = read_humaneval_r_problems()
+            logger.info(
+                f"Running humaneval-R-{num_samples_per_task}, output to {out_path}"
+            )
+        else:
+            problems = read_humaneval_problems()
+            logger.info(
+                f"Running humaneval-{num_samples_per_task}, output to {out_path}"
+            )
+
         samples = run_eval(
             model,
             tokenizer,
             num_samples_per_task,
             out_path,
             generate_batch_completion,
+            problems=problems,
             batch_size=batch_size,
             # True,
             # limit=10,
@@ -370,7 +407,46 @@ def run_humaneval(
 
         logger.info(f"{len(pairs)} generations saved to {output_prediction_file}")
 
-        if calc_passk:
+        if ds_instance == DatasetInstances.MULTIPLT:
+            logger.info(ds_instance)
+            pbar = tqdm(total=len(samples))
+            for sample in samples:
+                task_id = sample["task_id"]
+                problem = problems[task_id]
+                if is_decoder_only:
+                    _, completion = split_column(sample["completion"], ds_instance)
+                else:
+                    completion = sample["completion"]
+                out_dict = {
+                    "name": problem["name"],
+                    "language": problem["language"],
+                    # "temperature": temperature,
+                    # "top_p": top_p,
+                    # "max_tokens": max_tokens,
+                    "prompt": problem["prompt"],
+                    "tests": problem["tests"],
+                    "completions": [completion],
+                    "stop_tokens": problem["stop_tokens"],
+                }
+                output_problems_dir = os.path.join(
+                    save_path,
+                    "humaneval_r_problems",
+                )
+                output_problems_file = os.path.join(
+                    output_problems_dir,
+                    f"{task_id}.json",
+                )
+                ensure_path_exists(output_problems_dir)
+                out_dict = json.dumps(out_dict)
+                # with gzip.open(output_problems_file, "wt") as f:
+                #     f.write()
+                with open(output_problems_file, "w") as writer:
+                    writer.write(out_dict)
+
+                pbar.update(1)
+                pbar.set_description(f"Saving {task_id}")
+
+        if ds_instance == DatasetInstances.SPP and calc_passk:
             results, details = evaluate_functional_correctness(
                 sample_file=out_path,
                 # k=[1, 10, 100],

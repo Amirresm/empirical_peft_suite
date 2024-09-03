@@ -1,6 +1,7 @@
 from itertools import chain
 
 from datasets import DatasetDict, load_dataset
+from datasets.combine import DatasetType
 from huggingface_hub.constants import typing
 
 from constants import (
@@ -27,11 +28,13 @@ def detect_type(files: list[str | None]):
         "spp": DatasetTypes.ONECOL,
         "CodeSearchNet": DatasetTypes.TWOCOL,
         "csn": DatasetTypes.TWOCOL,
+        "multiplt": DatasetTypes.TWOCOL,
     }
     instance_mapping = {
         "spp": DatasetInstances.SPP,
         "CodeSearchNet": DatasetInstances.CSN,
         "csn": DatasetInstances.CSN,
+        "multiplt": DatasetInstances.MULTIPLT,
     }
     ds_type = DatasetTypes.UNKNOWN
     ds_instance = DatasetInstances.UNKNOWN
@@ -139,9 +142,10 @@ def get_dataset_metadata(
         column_names = raw_datasets["test"].column_names
     else:
         logger.info(
-            "There is nothing to do. Please pass `do_train`, `do_eval` and/or `do_predict`."
+            "There is nothing to do. Please pass `do_train`, `do_eval` and/or `do_predict`. Assuming your going for humaneval..."
         )
         column_names = []
+        return column_names, None, None
 
     dataset_columns = summarization_name_mapping.get(dataset_name, None)
     if text_column is None:
@@ -169,19 +173,24 @@ def get_dataset_metadata(
 
 
 def filter_dataset(
-    dataset: DatasetDict,
+    dataset,
     text_column: str,
     summary_column: str,
     preprocessing_num_workers: int | None = None,
 ):
-    for split in dataset:
-        if split in dataset:
-            logger.info(f"Filtering {split} dataset for None records.")
-            dataset[split] = dataset[split].filter(
-                lambda x: x[text_column] is not None
-                and (summary_column == "NONE" or x[summary_column] is not None),
-                num_proc=preprocessing_num_workers,
-            )
+    length_before = len(dataset)
+    logger.info("Filtering dataset for None records.")
+    dataset = dataset.filter(
+        lambda x: x[text_column] and (summary_column == "NONE" or x[summary_column]),
+        num_proc=preprocessing_num_workers,
+    )
+
+    length_after = len(dataset)
+
+    logger.info(
+        f"Filtered dataset: {length_before} -> {length_after} (removed {length_before - length_after})"
+    )
+    return dataset
 
 
 def get_column_preprocessor(
@@ -218,6 +227,12 @@ def get_column_preprocessor(
                 input = join_prefix_prompt(prefix, input)
                 inputs.append(input)
                 targets.append(target)
+            else:
+                logger.info(f"text col:\n{examples[text_column][i]}")
+                logger.info(f"summary col:\n{examples[summary_column][i]}")
+                raise ValueError(
+                    "Invalid data found in the dataset. Please check the dataset and the column names passed."
+                )
 
         examples[PROMPT_COL] = inputs
         examples[COMPLETION_COL] = targets
@@ -474,11 +489,20 @@ def process_dataset(
         dataset = dataset.select(range(max_sample_count))
 
     with main_process_first(desc=f"{split} dataset map pre-processing"):
+        dataset = filter_dataset(
+            dataset,
+            text_column,
+            summary_column,
+            preprocessing_num_workers=preprocessing_num_workers,
+        )
+
+        logger.info(f"{split}_dataset before:\n{dataset}")
+        remove_columns = [col for col in dataset.column_names if col not in ["prompt", "completion"]]
         dataset = dataset.map(
             column_preprocessor,
             batched=True,
             num_proc=preprocessing_num_workers,
-            remove_columns=dataset.column_names,
+            remove_columns=remove_columns,
             load_from_cache_file=not overwrite_cache,
             desc=f"Processing columns on {split} dataset",
         )

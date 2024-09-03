@@ -44,4 +44,5 @@ class DatasetTypes:
 class DatasetInstances:
     SPP = "spp"
     CSN = "csn"
+    MULTIPLT = "multiplt"
     UNKNOWN = "unknown"

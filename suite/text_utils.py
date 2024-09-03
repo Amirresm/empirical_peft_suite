@@ -73,6 +73,7 @@ def join_prefix_prompt(prefix, prompt):
     return f"{prefix}{prompt}"
 
 
+# ====== CSN
 def csn_create_prompt(input):
     return f"{input}\n# summary:\n"
 
@@ -90,6 +91,7 @@ def csn_split(input):
     return prompt, completion
 
 
+# ====== SPP
 def spp_create_prompt(input):
     return f"{input}"
 
@@ -107,12 +109,41 @@ def spp_split(input):
     return prompt, completion
 
 
+# ====== MULTIPLT
+def multiplt_create_prompt(input):
+    return f"{input}"
+
+
+def multiplt_join(prompt, completion):
+    return f"{prompt}{completion}"
+
+
+def multiplt_split(input):
+    content = input
+    comment = ""
+    signature = ""
+    code = ""
+    for line in content.splitlines():
+        if line.startswith("#") and not signature:
+            comment += line + "\n"
+        else:
+            if not signature:
+                signature = line + "\n"
+            else:
+                code += line + "\n"
+    prompt = comment + signature
+    completion = code
+    return prompt, completion
+
+
 def modify_prompt(prompt, ds_type):
     match ds_type:
         case DatasetInstances.CSN:
             return csn_create_prompt(prompt)
         case DatasetInstances.SPP:
             return spp_create_prompt(prompt)
+        case DatasetInstances.MULTIPLT:
+            return multiplt_create_prompt(prompt)
         case _:
             return prompt
 
@@ -123,6 +154,8 @@ def join_columns(prompt, completion, ds_type):
             return csn_join(prompt, completion)
         case DatasetInstances.SPP:
             return spp_join(prompt, completion)
+        case DatasetInstances.MULTIPLT:
+            return multiplt_join(prompt, completion)
         case _:
             return prompt
 
@@ -133,5 +166,7 @@ def split_column(example, ds_type):
             return csn_split(example)
         case DatasetInstances.SPP:
             return spp_split(example)
+        case DatasetInstances.MULTIPLT:
+            return multiplt_split(example)
         case _:
             return example, ""

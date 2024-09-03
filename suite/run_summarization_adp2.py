@@ -747,7 +747,7 @@ def main():
 
     ## Humaneval
     num_samples_per_task = data_args.humaneval_num
-    if ds_instance == DatasetInstances.SPP and num_samples_per_task > 0:
+    if (ds_instance in [DatasetInstances.SPP, DatasetInstances.MULTIPLT]) and num_samples_per_task > 0:
         generation_save_dir = (
             model_args.generation_output_path
             if model_args.generation_output_path is not None
@@ -770,6 +770,7 @@ def main():
             save_path=generation_save_dir,
             batch_size=misc_args.humaneval_batch_size,
             prompt_mode=misc_args.humaneval_prompt_mode,
+            ds_instance=ds_instance,
         )
         elapsed = timer.stop()
         if elapsed is not None:
