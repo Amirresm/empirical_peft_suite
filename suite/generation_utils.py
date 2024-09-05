@@ -219,7 +219,7 @@ def generation_decoder_only(
             preds,
             outputs,
             token_counts,
-            range(len(raw_outputs)),
+            range(len(preds)),
         )
     ]
 

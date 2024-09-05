@@ -146,8 +146,10 @@ def main():
 
     [h.flush() for h in logger.handlers]
 
-    # check if output_dir + all_results.json exists
-    if os.path.exists(os.path.join(training_args.output_dir, "all_results.json")):
+    rename_all_results = False
+    if rename_all_results and os.path.exists(
+        os.path.join(training_args.output_dir, "all_results.json")
+    ):
         logger.info(
             f"all_results.json exists in {training_args.output_dir}, renaming to old_all_results.json"
         )
@@ -747,7 +749,9 @@ def main():
 
     ## Humaneval
     num_samples_per_task = data_args.humaneval_num
-    if (ds_instance in [DatasetInstances.SPP, DatasetInstances.MULTIPLT]) and num_samples_per_task > 0:
+    if (
+        ds_instance in [DatasetInstances.SPP, DatasetInstances.MULTIPLT]
+    ) and num_samples_per_task > 0:
         generation_save_dir = (
             model_args.generation_output_path
             if model_args.generation_output_path is not None

@@ -129,19 +129,7 @@ def main():
         scan_dir(args.input)
 
     else:
-        with open(args.input, "r") as file:
-            file_name = os.path.basename(args.input)
-            split = file_name.split(".")[0]
-            parent_dir = os.path.dirname(args.input)
-            parent_dir = os.path.dirname(parent_dir)
-            preds, targets = read_generations_from_file2(file)
-
-            results = calc_all_metrics(preds, targets, split)
-
-            log_metrics(split, results)
-
-            save_metrics(split, results, parent_dir)
-
+        do_codebleu(args.input)
 
 def read_generations_from_file2(file, line_limit=1000000):
     bar = tqdm.tqdm()
@@ -195,7 +183,7 @@ def calc_all_metrics(preds, labels, split):
 
     res = {}
     for k, v in result.items():
-        res[f"{split}_{k}"] = v
+        res[f"{split}_CODEBLEU_{k}"] = v
 
     return res
 
