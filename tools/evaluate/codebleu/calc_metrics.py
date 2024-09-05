@@ -1,7 +1,7 @@
 import os
 import json
 import argparse
-from typing import Dict
+from typing import Dict, Optional
 import tqdm
 from codebleu import calc_codebleu
 
@@ -65,28 +65,82 @@ def save_metrics(split, metrics, output_dir, combined=True):
         with open(output_dir, "w") as f:
             json.dump(all_metrics, f, indent=4, sort_keys=True)
 
+def scan_dir(dir: str):
+    datasets = set()
+    configs = {}
+    gen_job_datasets = ["spp_30k", "sppu_30k", "multiplt-r"]
+    for model in os.scandir(dir):
+        model = model.path
+        # model_name = model.split("/")[-1]
+        # print(f"Model: {model_name}")
+
+        for dataset in os.scandir(model):
+            dataset = dataset.path
+            dataset_name = dataset.split("/")[-1]
+            datasets.add(dataset_name)
+            # print(f"    Dataset: {dataset_name}")
+
+            for config_path in os.scandir(dataset):
+                config_path = config_path.path
+                if dataset_name in gen_job_datasets:
+                    process_path = os.path.join(config_path, "gen_output", "generated_generations.txt")
+                    if os.path.exists(process_path):
+                        print(f"Processing {process_path}")
+                        do_codebleu(process_path)
+                    process_path = os.path.join(config_path, "gen_output", "generated_predictions.txt")
+                    if os.path.exists(process_path):
+                        print(f"Processing {process_path}")
+                        do_codebleu(process_path)
+                
+
+    return configs, datasets
+
+def do_codebleu(dir):
+    with open(dir, "r") as file:
+        file_name = os.path.basename(dir)
+        split = file_name.split(".")[0]
+        split = split.split("_")[-1]
+        if split == "predictions":
+            split = "predict"
+        elif split == "generations":
+            split = "generate"
+        else:
+            split = f"ukn_{file_name.split(".")[0]}"
+        parent_dir = os.path.dirname(dir)
+        parent_dir = os.path.dirname(parent_dir)
+        preds, targets = read_generations_from_file2(file)
+
+        try:
+            results = calc_all_metrics(preds, targets, split)
+
+            log_metrics(split, results)
+
+            save_metrics(split, results, parent_dir)
+        except Exception as e:
+            print(f"Failed, Error: {e}")
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=str, required=True)
+    parser.add_argument("--recursive", type=bool, default=False, required=False)
     args = parser.parse_args()
 
-    with open(args.input, "r") as file:
-        file_name = os.path.basename(args.input)
-        split = file_name.split(".")[0]
-        parent_dir = os.path.dirname(args.input)
-        parent_dir = os.path.dirname(parent_dir)
-        preds, targets = read_generations_from_file2(file)
+    if args.recursive:
+        scan_dir(args.input)
 
-        results = calc_all_metrics(preds, targets, split)
+    else:
+        with open(args.input, "r") as file:
+            file_name = os.path.basename(args.input)
+            split = file_name.split(".")[0]
+            parent_dir = os.path.dirname(args.input)
+            parent_dir = os.path.dirname(parent_dir)
+            preds, targets = read_generations_from_file2(file)
 
-        log_metrics(split, results)
+            results = calc_all_metrics(preds, targets, split)
 
-        save_metrics(split, results, parent_dir)
-        # save results next to args.input
-        # with open(args.input + ".codebleu_results.txt", "w") as file:
-        #     for key, value in results.items():
-        #         file.write(f"{key}: {value}\n")
+            log_metrics(split, results)
+
+            save_metrics(split, results, parent_dir)
 
 
 def read_generations_from_file2(file, line_limit=1000000):
@@ -127,7 +181,15 @@ def read_generations_from_file2(file, line_limit=1000000):
 
 def calc_all_metrics(preds, labels, split):
     result = {}
-    cb_results = calc_codebleu([[label] for label in labels], preds, lang="python")
+    weights = (0.25, 0.25, 0.25, 0.25)
+    cb_results = calc_codebleu([[label] for label in labels], preds, lang="python", weights=weights)
+    custom_codebleu = (
+        + weights[0] * cb_results["ngram_match_score"]
+        + weights[1] * cb_results["weighted_ngram_match_score"]
+        + weights[2] * cb_results["syntax_match_score"]
+        + weights[3] * cb_results["dataflow_match_score"]
+    )
+    cb_results["codebleu"] = custom_codebleu
     cb_results["codebleuP"] = cb_results["codebleu"] * 100
     result = {**result, **cb_results}
 

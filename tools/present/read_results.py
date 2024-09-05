@@ -215,6 +215,7 @@ def main():
     run_all(dir, "spp_30k")
     run_all(dir, "csn-python")
     run_all(dir, "sppu_30k")
+    run_all(dir, "multiplt-r")
 
 
 if __name__ == "__main__":
