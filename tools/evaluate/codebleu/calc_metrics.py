@@ -115,6 +115,26 @@ def do_codebleu(dir):
 
             log_metrics(split, results)
 
+            batch_size = 1
+            batch_count = len(preds) // batch_size if len(preds) % batch_size == 0 else len(preds) // batch_size + 1
+            bresults_list = []
+            for i in tqdm.tqdm(range(batch_count)):
+                bpreds = preds[i * batch_size: (i + 1) * batch_size]
+                btargets = targets[i * batch_size: (i + 1) * batch_size]
+                bresults = calc_all_metrics(bpreds, btargets, split)
+                bresults_list.append(bresults)
+
+            results = {}
+            for k, _ in bresults_list[0].items():
+                for bresults in bresults_list:
+                    if k in results:
+                        results[k] += bresults[k]
+                    else:
+                        results[k] = bresults[k]
+            for k, v in results.items():
+                results[k] = v / len(bresults_list)
+            
+            log_metrics(f"batch_{split}", results)
             save_metrics(split, results, parent_dir)
         except Exception as e:
             print(f"Failed, Error: {e}")
