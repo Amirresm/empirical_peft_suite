@@ -1,9 +1,10 @@
 import os
 import json
 import argparse
-from typing import Dict, Optional
+from typing import Dict
 import tqdm
 from codebleu import calc_codebleu
+from evaluate import load
 
 keys = [
     ("->Prompt:", "prompt"),
@@ -48,8 +49,9 @@ def log_metrics(split, metrics):
         print(f"  {key: <{k_width}} = {metrics_formatted[key]:>{v_width}}")
 
 
-def save_metrics(split, metrics, output_dir, combined=True):
-    output_path = os.path.join(output_dir, f"{split}_codebleu_results.json")
+def save_metrics(split, metrics, output_dir, task, combined=True):
+    task = "codebleu" if task == "codebleu" else "exactmatch"
+    output_path = os.path.join(output_dir, f"{split}_{task}_results.json")
     with open(output_path, "w") as f:
         json.dump(metrics, f, indent=4, sort_keys=True)
 
@@ -65,7 +67,7 @@ def save_metrics(split, metrics, output_dir, combined=True):
         with open(output_dir, "w") as f:
             json.dump(all_metrics, f, indent=4, sort_keys=True)
 
-def scan_dir(dir: str):
+def scan_dir(dir: str, task):
     datasets = set()
     configs = {}
     gen_job_datasets = ["spp_30k", "sppu_30k", "multiplt-r"]
@@ -86,16 +88,16 @@ def scan_dir(dir: str):
                     process_path = os.path.join(config_path, "gen_output", "generated_generations.txt")
                     if os.path.exists(process_path):
                         print(f"Processing {process_path}")
-                        do_codebleu(process_path)
-                    process_path = os.path.join(config_path, "gen_output", "generated_predictions.txt")
-                    if os.path.exists(process_path):
-                        print(f"Processing {process_path}")
-                        do_codebleu(process_path)
+                        do_codebleu(process_path, task)
+                    # process_path = os.path.join(config_path, "gen_output", "generated_predictions.txt")
+                    # if os.path.exists(process_path):
+                    #     print(f"Processing {process_path}")
+                    #     do_codebleu(process_path)
                 
 
     return configs, datasets
 
-def do_codebleu(dir):
+def do_codebleu(dir, task):
     with open(dir, "r") as file:
         file_name = os.path.basename(dir)
         split = file_name.split(".")[0]
@@ -110,17 +112,27 @@ def do_codebleu(dir):
         parent_dir = os.path.dirname(parent_dir)
         preds, targets = read_generations_from_file2(file)
 
+        exact_match_metric = load("exact_match")
         try:
-            #time this for me
-
             import time
-            start = time.time()
-            results = calc_all_metrics(preds, targets, split)
-            end = time.time()
+            if task == "codebleu":
+                start = time.time()
+                results = calc_all_metrics(preds, targets, split)
+                end = time.time()
+            elif task == "exact_match":
+                start = time.time()
+                results = results = exact_match_metric.compute(predictions=preds, references=targets)
+                end = time.time()
+                res = {}
+                for k, v in results.items():
+                    res[f"{split}_EM_{k}"] = v
+                results = res
+            else:
+                return
             print(f"Time taken: {end - start}")
 
             log_metrics(split, results)
-            save_metrics(split, results, parent_dir)
+            save_metrics(split, results, parent_dir, task)
 
             # batch_size = 5
             # batch_count = len(preds) // batch_size if len(preds) % batch_size == 0 else len(preds) // batch_size + 1
@@ -193,18 +205,6 @@ def do_codebleu(dir):
         except Exception as e:
             print(f"Failed, Error: {e}")
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input", type=str, required=True)
-    parser.add_argument("--recursive", type=bool, default=False, required=False)
-    args = parser.parse_args()
-
-    if args.recursive:
-        scan_dir(args.input)
-
-    else:
-        do_codebleu(args.input)
-
 def read_generations_from_file2(file, line_limit=1000000):
     bar = tqdm.tqdm()
     lines = file.readlines()
@@ -261,6 +261,20 @@ def calc_all_metrics(preds, labels, split):
 
     return res
 
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", type=str, required=True)
+    parser.add_argument("--recursive", type=bool, default=False, required=False)
+    args = parser.parse_args()
+
+    if args.recursive:
+        scan_dir(args.input, "exact_match")
+        scan_dir(args.input, "codebleu")
+
+    else:
+        do_codebleu(args.input, "exact_match")
+        do_codebleu(args.input, "codebleu")
 
 if __name__ == "__main__":
     main()
