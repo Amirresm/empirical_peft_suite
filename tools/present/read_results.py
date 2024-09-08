@@ -1,11 +1,9 @@
-import re
 import os
 import re
 import json
 import csv
 from argparse import ArgumentParser
-
-
+from pathlib import Path
 
 
 class ConfigMeta:
@@ -58,6 +56,7 @@ class Config:
         if not self.valid:
             return
         all_results_path = os.path.join(self.path, "all_results.json")
+        other_results_paths = [p for p in Path(self.path).glob("*_results.json")]
         all_results = {}
         if os.path.exists(all_results_path):
             with open(all_results_path, "r") as f:
@@ -70,6 +69,15 @@ class Config:
                 self.all_results = {**self.all_results, **self.meta.__dict__}
             except Exception as e:
                 print(f"            Error: {e}")
+
+        for other_result in other_results_paths:
+            with open(other_result, "r") as f:
+                other_results = f.read()
+                try:
+                    other_results = json.loads(other_results)
+                    self.all_results = {**self.all_results, **other_results}
+                except Exception as e:
+                    print(f"            Error: {e}")
 
     def __str__(self):
         if not self.valid:
@@ -104,6 +112,7 @@ def scan_dir(dir: str):
 
     return configs, datasets
 
+
 def get_fields(configs):
     fixed_fields = [
         "job",
@@ -132,16 +141,14 @@ def get_fields(configs):
         "samples",
     ]
     filters = [
-            r"^.*_BLEU.?_(precisions|bleu|brevity_penalty|length_ratio)$",
-            # r"^.*_BLEU.?_((reference|translation)_length)$",
-            # r"^.*ROUGE.*$",
-            r"^.*per_second.*$",
+        r"^.*_BLEU.?_(precisions|bleu|brevity_penalty|length_ratio)$",
+        # r"^.*_BLEU.?_((reference|translation)_length)$",
+        # r"^.*ROUGE.*$",
+        r"^.*per_second.*$",
     ]
     all_fields = set()
     for c in configs:
-        all_fields.update(
-            [f for f in c.all_results.keys() if f not in fixed_fields]
-        )
+        all_fields.update([f for f in c.all_results.keys() if f not in fixed_fields])
     main_fields = []
     all_fields = sorted(all_fields)
     for fg in field_groups:
@@ -164,14 +171,26 @@ def get_fields(configs):
         if f not in main_fields:
             main_fields.append(f)
 
-    main_fields = [f for f in main_fields if not any([bool(re.search(filter, f)) for filter in filters])]
+    main_fields = [
+        f
+        for f in main_fields
+        if not any([bool(re.search(filter, f)) for filter in filters])
+    ]
 
     all_fields = fixed_fields + main_fields
 
     return all_fields
 
+
 def sorted_rows(configs, fields):
-    sort_by = ["remark", "job", "model", "dataset", "peft_lib", "peft"]
+    sort_by = [
+        "job",
+        "dataset",
+        "model",
+        "remark",
+        "peft_lib",
+        "peft",
+    ]
     for by in reversed(sort_by):
         if by[0] == "-":
             by = by[1:]
@@ -180,6 +199,7 @@ def sorted_rows(configs, fields):
 
     configs = list(map(lambda c: {k: c[k] for k in c if k in fields}, configs))
     return configs
+
 
 def get_csv(dataset, configs):
     ds_configs = [c for c in configs.values() if c.meta.dataset == dataset]
@@ -192,6 +212,7 @@ def get_csv(dataset, configs):
         writer = csv.DictWriter(csvfile, fieldnames=all_fields)
         writer.writeheader()
         writer.writerows(rows)
+
 
 def run_all(dir, dataset):
     job_path = "sum" if dataset == "csn-python" else "gen"
