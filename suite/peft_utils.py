@@ -1,6 +1,7 @@
 import os
 from logging_utils import logger
 import peft
+import torch
 
 
 def get_peft_config(adapter_config, is_decoder_only=False):
@@ -44,7 +45,15 @@ def init_peft_adapter(adapter_config, config_title, model, is_decoder_only=False
             adapter_name=adapter_name,
             # autocast_adapter_dtype=False,
         )
+        # peft.cast_mixed_precision_params(model, torch.bfloat16)
         model = model.to(device)
+
+        # # print all model paramter dtypes
+        # for name, param in model.named_parameters():
+        #     if param.dtype == torch.float32:
+        #         logger.info(f"{name}: {param.dtype}")
+        #     if "self_attn" in name and param.dtype == torch.float32:
+        #         param.data = param.data.to(torch.bfloat16)
         return model
     else:
         logger.warning(
