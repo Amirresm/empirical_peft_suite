@@ -104,6 +104,7 @@ def scan_dir(dir: str, task, total=None):
                         os.path.exists(process_path)
                         and len(splits) == 6
                         and all(splits)
+                        and splits[0] != "infermodea"
                     ):
                         current += 1
                         split = "generate"
@@ -122,8 +123,7 @@ def scan_dir(dir: str, task, total=None):
 
     for process_path, task, config_path in tqdm.tqdm(jobs):
         print(f"Processing {process_path}")
-        time.sleep(1)
-        # do_codebleu(process_path, task)
+        do_codebleu(process_path, task)
 
     return configs, datasets, current
 
