@@ -1,3 +1,4 @@
+import re
 import os
 import json
 import argparse
@@ -67,10 +68,14 @@ def save_metrics(split, metrics, output_dir, task, combined=True):
         with open(output_dir, "w") as f:
             json.dump(all_metrics, f, indent=4, sort_keys=True)
 
-def scan_dir(dir: str, task):
+
+def scan_dir(dir: str, task, total=None):
+    current = 0
     datasets = set()
+    jobs = []
     configs = {}
-    gen_job_datasets = ["spp_30k", "sppu_30k", "multiplt-r"]
+    # gen_job_datasets = ["spp_30k", "sppu_30k", "multiplt-r"]
+    gen_job_datasets = ["spp_30k", "sppu_30k"]
     for model in os.scandir(dir):
         model = model.path
         # model_name = model.split("/")[-1]
@@ -85,17 +90,43 @@ def scan_dir(dir: str, task):
             for config_path in os.scandir(dataset):
                 config_path = config_path.path
                 if dataset_name in gen_job_datasets:
-                    process_path = os.path.join(config_path, "gen_output", "generated_generations.txt")
-                    if os.path.exists(process_path):
-                        print(f"Processing {process_path}")
-                        do_codebleu(process_path, task)
-                    # process_path = os.path.join(config_path, "gen_output", "generated_predictions.txt")
-                    # if os.path.exists(process_path):
-                    #     print(f"Processing {process_path}")
-                    #     do_codebleu(process_path)
-                
+                    config_name = config_path.split("/")[-1]
+                    if re.search("(spp.*k)", config_name):
+                        matched = re.search("(spp.*k)", config_name).group(0)
+                        config_name = config_name.replace(
+                            matched, matched.replace("_", "-")
+                        )
+                    splits = config_name.split("_")
+                    process_path = os.path.join(
+                        config_path, "gen_output", "generated_generations.txt"
+                    )
+                    if (
+                        os.path.exists(process_path)
+                        and len(splits) == 6
+                        and all(splits)
+                    ):
+                        current += 1
+                        split = "generate"
+                        results_path = os.path.join(
+                            config_path,
+                            f"{split}_{"codebleu" if task == "codebleu" else "exactmatch"}_results.json",
+                        )
+                        if os.path.exists(results_path):
+                            print(f"Omitting {config_path}: already processed")
+                            continue
+                        else:
+                            print(f"Processing {process_path}")
+                            jobs.append((process_path, task, config_path))
 
-    return configs, datasets
+    import time
+
+    for process_path, task, config_path in tqdm.tqdm(jobs):
+        print(f"Processing {process_path}")
+        time.sleep(1)
+        # do_codebleu(process_path, task)
+
+    return configs, datasets, current
+
 
 def do_codebleu(dir, task):
     with open(dir, "r") as file:
@@ -113,23 +144,22 @@ def do_codebleu(dir, task):
         preds, targets = read_generations_from_file2(file)
 
         exact_match_metric = load("exact_match")
+        import time
+        start = time.time()
         try:
-            import time
+
             if task == "codebleu":
-                start = time.time()
                 results = calc_all_metrics(preds, targets, split)
-                end = time.time()
             elif task == "exact_match":
-                start = time.time()
-                results = results = exact_match_metric.compute(predictions=preds, references=targets)
-                end = time.time()
+                results = results = exact_match_metric.compute(
+                    predictions=preds, references=targets
+                )
                 res = {}
                 for k, v in results.items():
                     res[f"{split}_EM_{k}"] = v
                 results = res
             else:
                 return
-            print(f"Time taken: {end - start}")
 
             log_metrics(split, results)
             save_metrics(split, results, parent_dir, task)
@@ -154,7 +184,7 @@ def do_codebleu(dir, task):
             #             results[k] = bresults[k]
             # for k, v in results.items():
             #     results[k] = v / len(bresults_list)
-            # 
+            #
             # log_metrics(f"batch_{split}", results)
 
             # batch_size = 5
@@ -179,7 +209,7 @@ def do_codebleu(dir, task):
             #     pbar.update(1)
             #     pbar.set_description(f"Processed {i} - {score_so_far:.2f}")
 
-            # 
+            #
             # log_metrics(f"batch_{split}", results)
 
             # batch_size = 5
@@ -199,11 +229,14 @@ def do_codebleu(dir, task):
             #     score = results[f"{split}_CODEBLEU_codebleu"]
             #     pbar.update(1)
             #     pbar.set_description(f"Processed {i} - {score}")
-            # 
+            #
             # log_metrics(f"batch_{split}", results)
             # save_metrics(split, results, parent_dir)
         except Exception as e:
             print(f"Failed, Error: {e}")
+
+        end = time.time()
+        print(f"Time taken: {end - start}")
 
 def read_generations_from_file2(file, line_limit=1000000):
     bar = tqdm.tqdm()
@@ -244,9 +277,11 @@ def read_generations_from_file2(file, line_limit=1000000):
 def calc_all_metrics(preds, labels, split):
     result = {}
     weights = (0.25, 0.25, 0.25, 0.25)
-    cb_results = calc_codebleu([[label] for label in labels], preds, lang="python", weights=weights)
+    cb_results = calc_codebleu(
+        [[label] for label in labels], preds, lang="python", weights=weights
+    )
     custom_codebleu = (
-        + weights[0] * cb_results["ngram_match_score"]
+        +weights[0] * cb_results["ngram_match_score"]
         + weights[1] * cb_results["weighted_ngram_match_score"]
         + weights[2] * cb_results["syntax_match_score"]
         + weights[3] * cb_results["dataflow_match_score"]
@@ -275,6 +310,7 @@ def main():
     else:
         do_codebleu(args.input, "exact_match")
         do_codebleu(args.input, "codebleu")
+
 
 if __name__ == "__main__":
     main()
