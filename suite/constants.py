@@ -45,4 +45,5 @@ class DatasetInstances:
     SPP = "spp"
     CSN = "csn"
     MULTIPLT = "multiplt"
+    RSUM = "rsum"
     UNKNOWN = "unknown"

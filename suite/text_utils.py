@@ -91,6 +91,24 @@ def csn_split(input):
     return prompt, completion
 
 
+# ====== RSUM
+def rsum_create_prompt(input):
+    return f"{input}\n# summary:\n"
+
+
+def rsum_join(prompt, completion):
+    return f"{prompt}{completion}"
+
+
+def rsum_split(input):
+    splits = input.split("# summary:")
+    prompt = splits[0]
+    if len(splits) == 1:
+        return input, input
+    completion = splits[1]
+    return prompt, completion
+
+
 # ====== SPP
 def spp_create_prompt(input):
     return f"{input}"
@@ -144,6 +162,8 @@ def modify_prompt(prompt, ds_type):
             return spp_create_prompt(prompt)
         case DatasetInstances.MULTIPLT:
             return multiplt_create_prompt(prompt)
+        case DatasetInstances.RSUM:
+            return rsum_create_prompt(prompt)
         case _:
             return prompt
 
@@ -156,6 +176,8 @@ def join_columns(prompt, completion, ds_type):
             return spp_join(prompt, completion)
         case DatasetInstances.MULTIPLT:
             return multiplt_join(prompt, completion)
+        case DatasetInstances.RSUM:
+            return rsum_join(prompt, completion)
         case _:
             return prompt
 
@@ -168,5 +190,7 @@ def split_column(example, ds_type):
             return spp_split(example)
         case DatasetInstances.MULTIPLT:
             return multiplt_split(example)
+        case DatasetInstances.RSUM:
+            return rsum_split(example)
         case _:
             return example, ""

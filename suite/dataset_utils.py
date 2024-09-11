@@ -29,16 +29,19 @@ def detect_type(files: list[str | None]):
         "CodeSearchNet": DatasetTypes.TWOCOL,
         "csn": DatasetTypes.TWOCOL,
         "multiplt": DatasetTypes.TWOCOL,
+        "rsum": DatasetTypes.TWOCOL,
     }
     instance_mapping = {
         "spp": DatasetInstances.SPP,
         "CodeSearchNet": DatasetInstances.CSN,
         "csn": DatasetInstances.CSN,
         "multiplt": DatasetInstances.MULTIPLT,
+        "rsum": DatasetInstances.RSUM,
     }
     ds_type = DatasetTypes.UNKNOWN
     ds_instance = DatasetInstances.UNKNOWN
     for file in files:
+        logger.info(f"file: {file}")
         for k, v in type_mapping.items():
             if file and k.lower() in file.lower():
                 ds_type = v
