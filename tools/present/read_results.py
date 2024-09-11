@@ -215,7 +215,7 @@ def get_csv(dataset, configs):
 
 
 def run_all(dir, dataset):
-    job_path = "sum" if dataset == "csn-python" else "gen"
+    job_path = "sum" if dataset in ["csn-python", "csn-ruby"] else "gen"
     configs, datasets = scan_dir(os.path.join(dir, job_path))
 
     get_csv(dataset, configs)
@@ -233,8 +233,9 @@ def main():
 
     dir = args.root_dir
 
-    run_all(dir, "spp_30k")
     run_all(dir, "csn-python")
+    run_all(dir, "csn-ruby")
+    run_all(dir, "spp_30k")
     run_all(dir, "sppu_30k")
     run_all(dir, "multiplt-r")
 
