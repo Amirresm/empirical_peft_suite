@@ -215,7 +215,7 @@ def get_csv(dataset, configs):
 
 
 def run_all(dir, dataset):
-    job_path = "sum" if dataset in ["csn-python", "csn-ruby", "rsum-combined"] else "gen"
+    job_path = "sum" if "csn" in dataset or dataset in ["rsum-combined"] else "gen"
     configs, datasets = scan_dir(os.path.join(dir, job_path))
 
     get_csv(dataset, configs)
@@ -235,6 +235,8 @@ def main():
 
     run_all(dir, "csn-python")
     run_all(dir, "csn-ruby")
+    run_all(dir, "csn-javascript")
+    run_all(dir, "csn-php")
     run_all(dir, "rsum-combined")
     run_all(dir, "spp_30k")
     run_all(dir, "sppu_30k")
