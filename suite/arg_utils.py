@@ -378,6 +378,11 @@ class MiscArguments:
         metadata={"help": ("Humaneval prompt mode")},
     )
 
+    rename_all_results: Optional[bool] = field(
+        default=False,
+        metadata={"help": ("Rename existing all results instead of overwriting")},
+    )
+
 
 def parse_arguments():
     parser = HfArgumentParser((

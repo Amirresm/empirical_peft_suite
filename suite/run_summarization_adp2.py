@@ -1,3 +1,4 @@
+import shutil
 import os
 import evaluate
 import torch
@@ -147,17 +148,25 @@ def main():
     [h.flush() for h in logger.handlers]
 
     rename_all_results = False
-    if rename_all_results and os.path.exists(
-        os.path.join(training_args.output_dir, "all_results.json")
-    ):
-        logger.info(
-            f"all_results.json exists in {training_args.output_dir}, renaming to old_all_results.json"
-        )
-        # rename all_results.json to old_all_results.json
-        os.rename(
-            os.path.join(training_args.output_dir, "all_results.json"),
-            os.path.join(training_args.output_dir, "old_all_results.json"),
-        )
+    if os.path.exists(os.path.join(training_args.output_dir, "all_results.json")):
+        if rename_all_results:
+            logger.info(
+                f"all_results.json exists in {training_args.output_dir}, renaming to old_all_results.json"
+            )
+            # rename all_results.json to old_all_results.json
+            os.rename(
+                os.path.join(training_args.output_dir, "all_results.json"),
+                os.path.join(training_args.output_dir, "old_all_results.json"),
+            )
+        else:
+            logger.info(
+                f"all_results.json exists in {training_args.output_dir}, backing up to old_all_results.json"
+            )
+            # copy all_results.json
+            shutil.copy(
+                os.path.join(training_args.output_dir, "all_results.json"),
+                os.path.join(training_args.output_dir, "old_all_results.json"),
+            )
 
     config = init_config(
         config_name=model_args.config_name,
