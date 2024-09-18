@@ -237,6 +237,7 @@ def main():
     run_all(dir, "csn-ruby")
     run_all(dir, "csn-javascript")
     run_all(dir, "csn-php")
+    run_all(dir, "csn-go")
     run_all(dir, "rsum-combined")
     run_all(dir, "spp_30k")
     run_all(dir, "sppu_30k")
