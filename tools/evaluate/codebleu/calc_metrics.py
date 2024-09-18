@@ -69,6 +69,31 @@ def save_metrics(split, metrics, output_dir, task, combined=True):
             json.dump(all_metrics, f, indent=4, sort_keys=True)
 
 
+def custom_exact_match(preds, targets):
+    strict_match = 0
+    exact_match = 0
+    loose_match = 0
+    total = 0
+    for pred, target in zip(preds, targets):
+        total += 1
+        if pred == target:
+            strict_match += 1
+        if pred.strip() == target.strip():
+            exact_match += 1
+        if pred.lower().strip() == target.lower().strip():
+            loose_match += 1
+
+    print(f"Total: {total}")
+    print(f"Strict Match: {strict_match}")
+    print(f"Exact Match: {exact_match}")
+    print(f"Loose Match: {loose_match}")
+    return {
+        "strict_match": strict_match / total,
+        "exact_match": exact_match / total,
+        "loose_match": loose_match / total,
+    }
+
+
 def scan_dir(dir: str, task, total=None):
     current = 0
     datasets = set()
@@ -145,18 +170,21 @@ def do_codebleu(dir, task):
 
         exact_match_metric = load("exact_match")
         import time
+
         start = time.time()
         try:
-
             if task == "codebleu":
                 results = calc_all_metrics(preds, targets, split)
             elif task == "exact_match":
                 results = results = exact_match_metric.compute(
                     predictions=preds, references=targets
                 )
+                custom_results = custom_exact_match(preds, targets)
                 res = {}
                 for k, v in results.items():
                     res[f"{split}_EM_{k}"] = v
+                for k, v in custom_results.items():
+                    res[f"{split}_EM_c_{k}"] = v
                 results = res
             else:
                 return
@@ -238,6 +266,7 @@ def do_codebleu(dir, task):
         end = time.time()
         print(f"Time taken: {end - start}")
 
+
 def read_generations_from_file2(file, line_limit=1000000):
     bar = tqdm.tqdm()
     lines = file.readlines()
@@ -256,6 +285,7 @@ def read_generations_from_file2(file, line_limit=1000000):
             else:
                 preds.append(buffer_dict[measure])
                 refs.append(buffer_dict["target"])
+                buffer_dict = {}
                 bar.update(1)
                 bar.set_description(f"Processed {len(preds)}")
                 continue
