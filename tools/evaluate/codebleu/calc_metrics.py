@@ -99,8 +99,8 @@ def scan_dir(dir: str, task, total=None):
     datasets = set()
     jobs = []
     configs = {}
-    # gen_job_datasets = ["spp_30k", "sppu_30k", "multiplt-r"]
-    gen_job_datasets = ["spp_30k", "sppu_30k"]
+    gen_job_datasets = ["spp_30k", "sppu_30k", "multiplt-r"]
+    # gen_job_datasets = ["spp_30k", "sppu_30k"]
     for model in os.scandir(dir):
         model = model.path
         # model_name = model.split("/")[-1]
@@ -140,11 +140,12 @@ def scan_dir(dir: str, task, total=None):
                         if os.path.exists(results_path):
                             print(f"Omitting {config_path}: already processed")
                             continue
+                        if dataset_name == "multiplt-r" and task == "codebleu":
+                            print(f"Omitting {config_path}: codebleu is not supported for R")
+                            continue
                         else:
                             print(f"Processing {process_path}")
                             jobs.append((process_path, task, config_path))
-
-    import time
 
     for process_path, task, config_path in tqdm.tqdm(jobs):
         print(f"Processing {process_path}")
@@ -192,74 +193,6 @@ def do_codebleu(dir, task):
             log_metrics(split, results)
             save_metrics(split, results, parent_dir, task)
 
-            # batch_size = 5
-            # batch_count = len(preds) // batch_size if len(preds) % batch_size == 0 else len(preds) // batch_size + 1
-            # bresults_list = []
-            # pbar = tqdm.tqdm(total=batch_count)
-            # for i in range(batch_count):
-            #     bpreds = preds[i * batch_size: (i + 1) * batch_size]
-            #     btargets = targets[i * batch_size: (i + 1) * batch_size]
-            #     bresults = calc_all_metrics(bpreds, btargets, split)
-            #     bresults_list.append(bresults)
-            #     pbar.update(1)
-
-            # results = {}
-            # for k, _ in bresults_list[0].items():
-            #     for bresults in bresults_list:
-            #         if k in results:
-            #             results[k] += bresults[k]
-            #         else:
-            #             results[k] = bresults[k]
-            # for k, v in results.items():
-            #     results[k] = v / len(bresults_list)
-            #
-            # log_metrics(f"batch_{split}", results)
-
-            # batch_size = 5
-            # batch_count = len(preds) // batch_size if len(preds) % batch_size == 0 else len(preds) // batch_size + 1
-            # bresults_list = []
-            # pbar = tqdm.tqdm(total=batch_count)
-            # for i in range(batch_count):
-            #     bpreds = preds[i * batch_size: (i + 1) * batch_size]
-            #     btargets = targets[i * batch_size: (i + 1) * batch_size]
-            #     bresults = calc_all_metrics(bpreds, btargets, split)
-            #     bresults_list.append(bresults)
-            #     results = {}
-            #     for k, _ in bresults_list[0].items():
-            #         for bresults in bresults_list:
-            #             if k in results:
-            #                 results[k] += bresults[k]
-            #             else:
-            #                 results[k] = bresults[k]
-            #     for k, v in results.items():
-            #         results[k] = v / len(bresults_list)
-            #     score_so_far = results[f"{split}_CODEBLEU_codebleuP"]
-            #     pbar.update(1)
-            #     pbar.set_description(f"Processed {i} - {score_so_far:.2f}")
-
-            #
-            # log_metrics(f"batch_{split}", results)
-
-            # batch_size = 5
-            # batch_count = len(preds) // batch_size if len(preds) % batch_size == 0 else len(preds) // batch_size + 1
-            # results = None
-            # pbar = tqdm.tqdm(total=batch_count)
-            # for i in range(batch_count):
-            #     bpreds = preds[i * batch_size: (i + 1) * batch_size]
-            #     btargets = targets[i * batch_size: (i + 1) * batch_size]
-            #     bresults = calc_all_metrics(bpreds, btargets, split)
-            #     if results is None:
-            #         results = bresults
-            #     else:
-            #         for k, v in bresults.items():
-            #             results[k] += v
-            #             results[k] /= 2
-            #     score = results[f"{split}_CODEBLEU_codebleu"]
-            #     pbar.update(1)
-            #     pbar.set_description(f"Processed {i} - {score}")
-            #
-            # log_metrics(f"batch_{split}", results)
-            # save_metrics(split, results, parent_dir)
         except Exception as e:
             print(f"Failed, Error: {e}")
 
@@ -271,6 +204,7 @@ def read_generations_from_file2(file, line_limit=1000000):
     bar = tqdm.tqdm()
     lines = file.readlines()
     buffer_dict: Dict | None = None
+    beginning_regex = re.compile(r"\d+=========")
     cursor = None
     preds = []
     refs = []
@@ -278,7 +212,7 @@ def read_generations_from_file2(file, line_limit=1000000):
         line_limit -= 1
         if line_limit == 0:
             break
-        if "=========" in line:
+        if beginning_regex.match(line):
             if buffer_dict is None:
                 buffer_dict = {}
                 continue
