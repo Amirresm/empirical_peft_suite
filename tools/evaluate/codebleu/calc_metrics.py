@@ -174,6 +174,12 @@ def do_codebleu(dir, task):
 
         start = time.time()
         try:
+            print("EXAMPLE =============================================================")
+            print("PRED: ===============================================================")
+            print(preds[1333])
+            print("TRGT: ===============================================================")
+            print(targets[1333])
+            print("=====================================================================")
             if task == "codebleu":
                 results = calc_all_metrics(preds, targets, split)
             elif task == "exact_match":
