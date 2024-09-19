@@ -235,6 +235,7 @@ def main():
 
     run_all(dir, "csn-python")
     run_all(dir, "csn-ruby")
+    run_all(dir, "csn-java")
     run_all(dir, "csn-javascript")
     run_all(dir, "csn-php")
     run_all(dir, "csn-go")
