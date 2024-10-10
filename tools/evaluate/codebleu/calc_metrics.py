@@ -176,9 +176,9 @@ def do_codebleu(dir, task):
         try:
             print("EXAMPLE =============================================================")
             print("PRED: ===============================================================")
-            print(preds[1333])
+            print(preds[33])
             print("TRGT: ===============================================================")
-            print(targets[1333])
+            print(targets[33])
             print("=====================================================================")
             if task == "codebleu":
                 results = calc_all_metrics(preds, targets, split)
