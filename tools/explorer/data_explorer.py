@@ -5,7 +5,7 @@ import keyboard
 
 from src.fs_tools import scan_dirtree
 from src.tui import Prompter, clear_screen
-from src.text_utils import read_generations_from_file
+from src.text_utils import print_diff, print_text, read_generations_from_file
 
 
 def main():
@@ -62,11 +62,10 @@ def main():
         ]
         mode = "compare"
         filter = "norm|infer|full"
+        diff = False
 
         cursor = 0
         main_config, main_out_list = folan[0]
-
-        char_limit = 200
 
         while True:
             clear_screen()
@@ -76,19 +75,22 @@ def main():
                 case "all":
                     for key, value in main_out_list[cursor].items():
                         print(f"=> {key} ================")
-                        print(value[:char_limit])
+                        print_text(value)
                 case "compare":
                     for key in ["prompt", "target"]:
                         print(f"=> {key} ================")
-                        print(main_out_list[cursor][key][:char_limit])
+                        print(main_out_list[cursor][key])
                     for config, out_list in folan:
                         if config.remark in filter.split("|"):
                             print(f"=> pred: {config.remark} {config.peft}({config.peft_lib}) ----------------")
-                            print(out_list[cursor]["pred"][:char_limit])
+                            if diff:
+                                print_diff(main_out_list[cursor]["target"], out_list[cursor]["pred"])
+                            else:
+                                print_text(out_list[cursor]["pred"])
                 case "compare-within":
                     for key in ["prompt", "target", "pred"]:
                         print(f"=> {key} ================")
-                        print(main_out_list[cursor][key][:char_limit])
+                        print_text(main_out_list[cursor][key])
                 case "prompt":
                     print(main_out_list[cursor]["prompt"])
                 case "target":
@@ -109,6 +111,8 @@ def main():
                         break
                     case "esc":
                         cursor = 0
+                    case "d":
+                        diff = not diff
                     case "m":
                         mode = prompter.prompt(message="Select mode: ", data=all_modes)
                     case "c":

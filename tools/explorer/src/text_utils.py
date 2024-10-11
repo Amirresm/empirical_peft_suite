@@ -3,6 +3,11 @@ from typing import Dict
 
 import tqdm
 
+import difflib
+
+from rich.console import Console
+from rich.text import Text
+
 
 class DatasetInstances:
     SPP = "spp"
@@ -271,3 +276,25 @@ def read_generations_from_file(file, line_limit=1000000):
                 buffer_dict[cursor] = line
 
     return out_list
+
+def print_text(string, limit=250):
+    string = string[:limit]
+    print(string)
+
+def print_diff(string1, string2, limit=250):
+    string1 = string1[:limit]
+    string2 = string2[:limit]
+    console = Console()
+    diff = difflib.ndiff(string1, string2)
+    diff = list(diff)
+    text = Text()
+
+    for line in diff:
+        if line.startswith("-"):
+            text.append(line[2:], style="bold white on red")  # Highlight deletions in red
+        elif line.startswith("+"):
+            text.append(line[2:], style="bold white on green")  # Highlight additions in green
+        else:
+            text.append(line[2:], style="white")  # Keep matching characters in white
+
+    console.print(text)
