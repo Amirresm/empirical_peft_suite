@@ -1,0 +1,10 @@
+codebleu==0.7.0
+evaluate==0.4.2
+keyboard
+prompt_toolkit
+RapidFuzz
+rich
+textual
+tree-sitter==0.22.3
+tree-sitter-python==0.21
+tqdm
