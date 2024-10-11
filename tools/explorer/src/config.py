@@ -30,8 +30,10 @@ class ConfigMeta:
     @staticmethod
     def from_dirname(dirname: str):
         match = re.search("(spp.*k)", dirname)
+        original = None
         if match:
             matched = match.group(0)
+            original = matched
             dirname = dirname.replace(matched, matched.replace("_", "-"))
         splits = dirname.split("_")
         if len(splits) != 6:
@@ -40,7 +42,7 @@ class ConfigMeta:
             "remark": splits[0],
             "job": splits[1],
             "model": splits[2],
-            "dataset": splits[3],
+            "dataset": original or splits[3],
             "peft_lib": splits[4],
             "peft": splits[5],
         }
