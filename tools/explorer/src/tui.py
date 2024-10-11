@@ -23,7 +23,9 @@ class Prompter:
     def __init__(self, data):
         self.completer = FuzzyCompleter(data)
 
-    def prompt(self, message="Enter query: "):
+    def prompt(self, message="Enter query: ", data = None):
+        if data is not None:
+            return prompt(message, completer=FuzzyCompleter(data))
         return prompt(message, completer=self.completer)
 
 
