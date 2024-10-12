@@ -40,6 +40,9 @@ def main():
             diff=False,
             mode="compare",
             filter="norm|infer|full",
+            shared_fields=["prompt", "target"],
+            compared_fields=["pred"],
+            main_field="pred",
         )
 
         config_batch = next((c for name, c in configs if name == choice), None)
@@ -102,10 +105,11 @@ def main():
                 case "compare":
                     tui_compare(
                         config_row_pairs,
-                        options.reference_config_name,
-                        options.filter,
-                        options.config_filter,
-                        options.diff,
+                        options=options,
+                        # options.reference_config_name,
+                        # options.filter,
+                        # options.config_filter,
+                        # options.diff,
                     )
                 case "compare-within":
                     for key in ["prompt", "target", "pred"]:

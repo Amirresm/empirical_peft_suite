@@ -22,6 +22,10 @@ class Options:
     cursor: int = 0
     break_loop: bool = False
     config_filter: list[str] = field(default_factory=list)
+    shared_fields: list[str] = field(default_factory=list)
+    compared_fields: list[str] = field(default_factory=list)
+    main_field: str = "pred"
+    all_fields: list[str] = field(default_factory=list)
 
 
 def tui_show_all(row: Dict[str, Any]):
@@ -32,24 +36,33 @@ def tui_show_all(row: Dict[str, Any]):
 
 def tui_compare(
     config_row_pairs: list[tuple[ConfigMeta, Dict[str, Any]]],
-    reference_config: str | None,
-    filter: str,
-    config_filter: list[str],
-    diff: bool,
+    options: Options,
+    # reference_config: str | None,
+    # filter: str,
+    # config_filter: list[str],
+    # diff: bool,
 ):
     console = Console()
     reference_row = next(
-        (row for config, row in config_row_pairs if str(config) == reference_config),
+        (
+            row
+            for config, row in config_row_pairs
+            if str(config) == options.reference_config_name
+        ),
         config_row_pairs[0][1],
     )
-    reference = reference_row["pred"]
-    if reference_config is None:
-        reference = reference_row["target"]
 
-    for key in ["prompt", "target"]:
+    reference = None
+    if options.reference_config_name is None:
+        if "target" in reference_row:
+            reference = reference_row["target"]
+    else:
+        reference = reference_row[options.main_field]
+
+    for key in options.shared_fields:
         heading_text = Text()
         heading_text.append("=" * 20, style="bold black on grey54")
-        if reference_config is None and key == "target":
+        if options.reference_config_name is None and key == "target":
             heading_text.append("===")
             heading_text.append("REF>", style="bold white on green")
             heading_text.append(f" {key}:")
@@ -59,19 +72,22 @@ def tui_compare(
         print(reference_row[key])
 
     for config, row in config_row_pairs:
-        is_reference = str(config) == reference_config
-        if config.remark in filter.split("|") and str(config) in config_filter:
-            metrics = pairwise_metrics(
-                reference,
-                row["pred"],
-            )
-            metrics = ", ".join([f"{k}={v:.2f}" for k, v in metrics.items()])
+        is_reference = str(config) == options.reference_config_name
+        if (
+            config.remark in options.filter.split("|")
+            and str(config) in options.config_filter
+        ):
+            if reference is not None:
+                metrics = pairwise_metrics(reference, row[options.main_field])
+                metrics = ", ".join([f"{k}={v:.2f}" for k, v in metrics.items()])
+            else:
+                metrics = ""
             section_text = Text()
             section_text.append("=" * 50, style="bold black on white")
             if is_reference:
                 section_text.append("===")
                 section_text.append("REF>", style="bold white on green")
-                section_text.append(" pred:")
+                section_text.append(f" {options.main_field}:")
             else:
                 section_text.append("======> pred:")
             section_text.append(f" {config.remark} ")
@@ -85,13 +101,13 @@ def tui_compare(
                 section_text.append(f"{config.peft}", style="bold yellow")
             section_text.append(f"({config.peft_lib}) > {metrics}")
             console.print(section_text)
-            if diff:
+            if options.diff:
                 print_diff(
                     reference,
-                    row["pred"],
+                    row[options.main_field],
                 )
             else:
-                print_text(row["pred"])
+                print_text(row[options.main_field])
 
 
 def data_menu(
@@ -165,7 +181,9 @@ def filter_menu(options: Options, config_names: list[str]) -> Options:
         text.append("Filter by config name:\n")
 
         for i, config in enumerate(config_names):
-            config_str = f"{"O-> " if config in options.config_filter else ""}{config}\n"
+            config_str = (
+                f"{"O-> " if config in options.config_filter else ""}{config}\n"
+            )
             if selected_index == i:
                 text.append(config_str, style="bold black on white")
             else:
