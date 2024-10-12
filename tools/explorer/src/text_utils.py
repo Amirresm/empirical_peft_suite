@@ -1,10 +1,10 @@
+import difflib
+import json
+import os
 import re
 from typing import Dict
 
 import tqdm
-
-import difflib
-
 from rich.console import Console
 from rich.text import Text
 
@@ -277,9 +277,32 @@ def read_generations_from_file(file, line_limit=1000000):
 
     return out_list
 
+
+def read_humaneval_r_from_file(dir):
+    rows = []
+    parent_dir = os.path.dirname(dir)
+    problem_files = os.listdir(os.path.join(parent_dir, "humaneval_r_problems_output"))
+    completion_files = os.listdir(os.path.join(parent_dir, "humaneval_r_problems"))
+    problem_files = sorted(problem_files, key=lambda x: int(x.split("_")[1]))
+    completion_files = sorted(completion_files, key=lambda x: int(x.split("_")[1]))
+    for problem_file, completion_file in zip(problem_files, completion_files):
+        with open(os.path.join(parent_dir, problem_file), "r") as file:
+            problem = json.load(file)
+        with open(os.path.join(parent_dir, completion_file), "r") as file:
+            completion = json.load(file)
+        row = {
+            **problem,
+            **completion,
+        }
+        rows.append(row)
+
+    return rows
+
+
 def print_text(string, limit=250):
     string = string[:limit]
     print(string)
+
 
 def print_diff(string1, string2, limit=250):
     string1 = string1[:limit]
@@ -291,9 +314,13 @@ def print_diff(string1, string2, limit=250):
 
     for line in diff:
         if line.startswith("-"):
-            text.append(line[2:], style="bold white on red")  # Highlight deletions in red
+            text.append(
+                line[2:], style="bold white on red"
+            )  # Highlight deletions in red
         elif line.startswith("+"):
-            text.append(line[2:], style="bold white on green")  # Highlight additions in green
+            text.append(
+                line[2:], style="bold white on green"
+            )  # Highlight additions in green
         else:
             text.append(line[2:], style="white")  # Keep matching characters in white
 
