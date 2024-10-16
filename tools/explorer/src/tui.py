@@ -2,7 +2,7 @@ import os
 
 from prompt_toolkit import prompt
 from prompt_toolkit.completion import Completer, Completion
-from rapidfuzz import process
+from fuzzyfinder import fuzzyfinder
 
 
 class FuzzyCompleter(Completer):
@@ -13,9 +13,9 @@ class FuzzyCompleter(Completer):
     def get_completions(self, document, complete_event):
         user_input = document.text
 
-        matches = process.extract(user_input, self.data, limit=10)
+        matches = fuzzyfinder(user_input, self.data, sort_results=False)
 
-        for match, score, _ in matches:
+        for match  in matches:
             yield Completion(match, start_position=-len(user_input))
 
 

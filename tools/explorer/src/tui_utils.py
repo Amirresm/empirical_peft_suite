@@ -1,15 +1,16 @@
+import difflib
+import sys
+import termios
+import tty
 from dataclasses import dataclass, field
 from typing import Any, Dict
 
+import keyboard
 from rich.console import Console
 from rich.text import Text
 
 from src.config import ConfigMeta
 from src.metrics import pairwise_metrics
-from src.text_utils import print_diff, print_text
-
-import keyboard
-
 from src.tui import Prompter, clear_screen
 
 
@@ -17,6 +18,7 @@ from src.tui import Prompter, clear_screen
 class Options:
     reference_config_name: str | None
     diff: bool
+    repr: bool
     mode: str
     filter: str
     cursor: int = 0
@@ -26,6 +28,24 @@ class Options:
     compared_fields: list[str] = field(default_factory=list)
     main_field: str = "pred"
     all_fields: list[str] = field(default_factory=list)
+
+
+print_repr = False
+
+
+def read_ch():
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+
+def consume_key():
+    read_ch()
 
 
 def tui_show_all(row: Dict[str, Any]):
@@ -109,6 +129,7 @@ def data_menu(
     while True:
         event = keyboard.read_event()
         if event.event_type == keyboard.KEY_DOWN:
+            consume_key()
             key = event.name
             match key:
                 case "0":
@@ -142,13 +163,16 @@ def data_menu(
                             raise ValueError
                     except ValueError as e:
                         print("Invalid index:", e)
-                        continue
+                case "s":
+                    global print_repr
+                    print_repr = not print_repr
+                    options.repr = not options.repr
                 case "f":
                     options = filter_menu(options, config_names)
                     break
                 case _:
                     # input()
-                    continue
+                    pass
 
             break
 
@@ -176,6 +200,7 @@ def filter_menu(options: Options, config_names: list[str]) -> Options:
 
         event = keyboard.read_event(suppress=True)
         if event.event_type == keyboard.KEY_DOWN:
+            consume_key()
             key = event.name
             match key:
                 case "down" | "j":
@@ -192,6 +217,53 @@ def filter_menu(options: Options, config_names: list[str]) -> Options:
                     break
 
     return options
+
+
+def print_text(string, limit=250):
+    global print_repr
+    if isinstance(string, list):
+        string = str(string)
+    if len(string) > limit:
+        string = string[limit:]
+    if print_repr:
+        print(repr(string))
+    else:
+        print(string)
+
+
+def print_diff(string1, string2, limit=250):
+    global print_repr
+
+    if isinstance(string1, list):
+        string1 = str(string1)
+    if isinstance(string2, list):
+        string2 = str(string2)
+    if print_repr:
+        string1 = repr(string1)
+        string2 = repr(string2)
+
+    if len(string1) > limit:
+        string1 = string1[limit:]
+    if len(string2) > limit:
+        string2 = string2[limit:]
+    console = Console()
+    diff = difflib.ndiff(string1, string2)
+    diff = list(diff)
+    text = Text()
+
+    for line in diff:
+        if line.startswith("-"):
+            text.append(
+                line[2:], style="bold white on red"
+            )  # Highlight deletions in red
+        elif line.startswith("+"):
+            text.append(
+                line[2:], style="bold white on green"
+            )  # Highlight additions in green
+        else:
+            text.append(line[2:], style="white")  # Keep matching characters in white
+
+    console.print(text)
 
 
 def print_per_config_header(
@@ -252,19 +324,24 @@ def print_compared_fields(key_text_pairs):
             atom = f"{key}: {text}"
             short_text = (
                 f"{atom} | "
-                if short_text == ""
+                if short_text == "" and i < len(key_text_pairs) - 1
+                else f"{atom}"
+                if short_text == "" and i == len(key_text_pairs) - 1
                 else short_text + f"{atom} | "
                 if i < len(key_text_pairs) - 1
                 else short_text + f"{atom}"
             )
         else:
-            atom = f"{key}:\n{text}\n"
-            long_text += (
+            atom = f"{key}:\n{text}"
+            long_text = (
                 f"{atom}\n"
-                if short_text == ""
-                else short_text + f"{atom}\n"
+                if long_text == "" and i < len(key_text_pairs) - 1
+                else f"{atom}"
+                if long_text == "" and i == len(key_text_pairs) - 1
+                else long_text + f"{atom}\n"
                 if i < len(key_text_pairs) - 1
-                else short_text + f"{atom}"
+                else long_text + f"{atom}"
             )
 
     print_text(short_text + long_text)
+    print_text("----------")

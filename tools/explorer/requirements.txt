@@ -2,7 +2,7 @@ codebleu==0.7.0
 evaluate==0.4.2
 keyboard
 prompt_toolkit
-RapidFuzz
+fuzzyfinder
 rich
 textual
 tree-sitter==0.22.3

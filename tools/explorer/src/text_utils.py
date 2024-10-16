@@ -274,7 +274,55 @@ def read_generations_from_file(file, line_limit=1000000):
                 buffer_dict[cursor] += line
             else:
                 buffer_dict[cursor] = line
+    if buffer_dict is not None:
+        out_list.append(buffer_dict)
 
+    return out_list
+
+
+def read_humaneval_python_from_file(file, line_limit=1000000):
+    lines = file.readlines()
+    buffer_dict: Dict | None = None
+    beginning_regex = re.compile(r"\d+=========")
+    cursor = None
+
+    out_list = []
+
+    keys = [
+        ("->Task:", "task"),
+        ("->Passed:", "passed"),
+        ("->Result:", "result"),
+        ("->Completion:", "completion"),
+    ]
+
+    for line in lines:
+        line_limit -= 1
+        if line_limit == 0:
+            break
+        if beginning_regex.match(line):
+            if buffer_dict is None:
+                buffer_dict = {}
+                continue
+            else:
+                out_list.append(buffer_dict)
+                buffer_dict = {}
+                continue
+        for key, value in keys:
+            if line.startswith(key):
+                cursor = value
+                continue
+        if line.startswith("->"):
+            continue
+        if buffer_dict is not None and cursor is not None and line != "--\n":
+            if cursor in buffer_dict:
+                buffer_dict[cursor] += line
+            else:
+                buffer_dict[cursor] = line
+
+    if buffer_dict is not None:
+        out_list.append(buffer_dict)
+
+    out_list = [{key: value.strip() for key, value in row.items()} for row in out_list]
     return out_list
 
 
@@ -308,36 +356,3 @@ def read_humaneval_r_from_file(dir):
 
     return rows
 
-
-def print_text(string, limit=250):
-    if isinstance(string, list):
-        string = str(string)
-    string = string[:limit]
-    print(string)
-
-
-def print_diff(string1, string2, limit=250):
-    if isinstance(string1, list):
-        string1 = str(string1)
-    if isinstance(string2, list):
-        string2 = str(string2)
-    string1 = string1[:limit]
-    string2 = string2[:limit]
-    console = Console()
-    diff = difflib.ndiff(string1, string2)
-    diff = list(diff)
-    text = Text()
-
-    for line in diff:
-        if line.startswith("-"):
-            text.append(
-                line[2:], style="bold white on red"
-            )  # Highlight deletions in red
-        elif line.startswith("+"):
-            text.append(
-                line[2:], style="bold white on green"
-            )  # Highlight additions in green
-        else:
-            text.append(line[2:], style="white")  # Keep matching characters in white
-
-    console.print(text)

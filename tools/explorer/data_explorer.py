@@ -1,18 +1,15 @@
 import logging
 import os
 import argparse
-import keyboard
 
 from src.fs_tools import scan_dirtree
-from src.metrics import pairwise_metrics
 from src.tui import Prompter, clear_screen
 from src.text_utils import (
-    print_diff,
-    print_text,
     read_generations_from_file,
+    read_humaneval_python_from_file,
     read_humaneval_r_from_file,
 )
-from src.tui_utils import Options, data_menu, tui_compare, tui_show_all
+from src.tui_utils import Options, data_menu, print_text, tui_compare, tui_show_all
 
 for key in logging.Logger.manager.loggerDict:
     print(key)
@@ -36,13 +33,14 @@ def main():
     while True:
         clear_screen()
         choice = prompter.prompt()
-        if choice == "exit":
+        if choice in ["exit", "q"]:
             break
         print(f"Query: {choice}")
 
         options = Options(
             reference_config_name=None,
             diff=False,
+            repr=False,
             mode="compare",
             filter="norm|infer|full",
         )
@@ -80,12 +78,20 @@ def main():
                 options.compared_fields = ["stdout", "stderr", "exit_code", "status"]
                 options.main_field = "completions"
             elif os.path.exists(generated_file):
-                with open(generated_file, "r") as file:
-                    out_list = read_generations_from_file(file)
-                config_rows_pairs.append((config, out_list))
-                options.shared_fields = ["prompt", "target"]
-                options.compared_fields = ["pred"]
-                options.main_field = "pred"
+                if source_file_name == "generated_humaneval.txt":
+                    with open(generated_file, "r") as file:
+                        out_list = read_humaneval_python_from_file(file)
+                    config_rows_pairs.append((config, out_list))
+                    options.shared_fields = ["task"]
+                    options.compared_fields = ["result"]
+                    options.main_field = "completion"
+                else:
+                    with open(generated_file, "r") as file:
+                        out_list = read_generations_from_file(file)
+                    config_rows_pairs.append((config, out_list))
+                    options.shared_fields = ["prompt", "target"]
+                    options.compared_fields = ["pred"]
+                    options.main_field = "pred"
             else:
                 print(f"File {generated_file} not found.")
 
