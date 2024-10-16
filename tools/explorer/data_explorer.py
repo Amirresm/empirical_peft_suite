@@ -6,7 +6,12 @@ import keyboard
 from src.fs_tools import scan_dirtree
 from src.metrics import pairwise_metrics
 from src.tui import Prompter, clear_screen
-from src.text_utils import print_diff, print_text, read_generations_from_file, read_humaneval_r_from_file
+from src.text_utils import (
+    print_diff,
+    print_text,
+    read_generations_from_file,
+    read_humaneval_r_from_file,
+)
 from src.tui_utils import Options, data_menu, tui_compare, tui_show_all
 
 for key in logging.Logger.manager.loggerDict:
@@ -40,9 +45,6 @@ def main():
             diff=False,
             mode="compare",
             filter="norm|infer|full",
-            shared_fields=["prompt", "target"],
-            compared_fields=["pred"],
-            main_field="pred",
         )
 
         config_batch = next((c for name, c in configs if name == choice), None)
@@ -55,7 +57,9 @@ def main():
             os.path.join(config_batch[0].get_path(base_dir), "gen_output")
         )
         source_file_name = [
-            f.split("/")[-1] for f in source_file_name if f.endswith(".txt") or "humaneval_r_problems" in f
+            f.split("/")[-1]
+            for f in source_file_name
+            if f.endswith(".txt") or "humaneval_r_problems" in f
         ]
         source_file_name = prompter.prompt(
             message="Select source file: ", data=source_file_name
@@ -66,13 +70,22 @@ def main():
             generated_file = os.path.join(
                 config.get_path(base_dir), "gen_output", source_file_name
             )
-            if os.path.exists(generated_file):
-                with open(generated_file, "r") as file:
-                    if "humaneval_r_problems" in generated_file:
-                        out_list = read_humaneval_r_from_file(generated_file)
-                    else:
-                        out_list = read_generations_from_file(file)
+            if (
+                os.path.isdir(generated_file)
+                and "humaneval_r_problems" in generated_file
+            ):
+                out_list = read_humaneval_r_from_file(generated_file)
                 config_rows_pairs.append((config, out_list))
+                options.shared_fields = ["prompt"]
+                options.compared_fields = ["stdout", "stderr", "exit_code", "status"]
+                options.main_field = "completions"
+            elif os.path.exists(generated_file):
+                with open(generated_file, "r") as file:
+                    out_list = read_generations_from_file(file)
+                config_rows_pairs.append((config, out_list))
+                options.shared_fields = ["prompt", "target"]
+                options.compared_fields = ["pred"]
+                options.main_field = "pred"
             else:
                 print(f"File {generated_file} not found.")
 

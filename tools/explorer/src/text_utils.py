@@ -286,25 +286,41 @@ def read_humaneval_r_from_file(dir):
     problem_files = sorted(problem_files, key=lambda x: int(x.split("_")[1]))
     completion_files = sorted(completion_files, key=lambda x: int(x.split("_")[1]))
     for problem_file, completion_file in zip(problem_files, completion_files):
-        with open(os.path.join(parent_dir, problem_file), "r") as file:
+        with open(
+            os.path.join(parent_dir, "humaneval_r_problems_output", problem_file), "r"
+        ) as file:
             problem = json.load(file)
-        with open(os.path.join(parent_dir, completion_file), "r") as file:
+            problem["stdout"] = problem["results"][0]["stdout"]
+            problem["stderr"] = problem["results"][0]["stderr"]
+            problem["exit_code"] = problem["results"][0]["exit_code"]
+            problem["status"] = problem["results"][0]["status"]
+        with open(
+            os.path.join(parent_dir, "humaneval_r_problems", completion_file), "r"
+        ) as file:
             completion = json.load(file)
+            completion["completions"] = completion["completions"][0]
         row = {
             **problem,
             **completion,
         }
+        print(row)
         rows.append(row)
 
     return rows
 
 
 def print_text(string, limit=250):
+    if isinstance(string, list):
+        string = str(string)
     string = string[:limit]
     print(string)
 
 
 def print_diff(string1, string2, limit=250):
+    if isinstance(string1, list):
+        string1 = str(string1)
+    if isinstance(string2, list):
+        string2 = str(string2)
     string1 = string1[:limit]
     string2 = string2[:limit]
     console = Console()

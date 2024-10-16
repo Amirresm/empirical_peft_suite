@@ -60,16 +60,10 @@ def tui_compare(
         reference = reference_row[options.main_field]
 
     for key in options.shared_fields:
-        heading_text = Text()
-        heading_text.append("=" * 20, style="bold black on grey54")
-        if options.reference_config_name is None and key == "target":
-            heading_text.append("===")
-            heading_text.append("REF>", style="bold white on green")
-            heading_text.append(f" {key}:")
-        else:
-            heading_text.append(f"======> {key}:")
-        console.print(heading_text)
-        print(reference_row[key])
+        print_shared_header(
+            console, key, options.reference_config_name is None and key == "target"
+        )
+        print_text(reference_row[key])
 
     for config, row in config_row_pairs:
         is_reference = str(config) == options.reference_config_name
@@ -82,32 +76,22 @@ def tui_compare(
                 metrics = ", ".join([f"{k}={v:.2f}" for k, v in metrics.items()])
             else:
                 metrics = ""
-            section_text = Text()
-            section_text.append("=" * 50, style="bold black on white")
-            if is_reference:
-                section_text.append("===")
-                section_text.append("REF>", style="bold white on green")
-                section_text.append(f" {options.main_field}:")
-            else:
-                section_text.append("======> pred:")
-            section_text.append(f" {config.remark} ")
-            if config.peft == "lora":
-                section_text.append(f"{config.peft}", style="bold green")
-            if config.peft == "compacter":
-                section_text.append(f"{config.peft}", style="bold red")
-            if config.peft == "ia3":
-                section_text.append(f"{config.peft}", style="bold blue")
-            if config.peft in ["full", "none"]:
-                section_text.append(f"{config.peft}", style="bold yellow")
-            section_text.append(f"({config.peft_lib}) > {metrics}")
-            console.print(section_text)
-            if options.diff:
-                print_diff(
-                    reference,
-                    row[options.main_field],
-                )
-            else:
-                print_text(row[options.main_field])
+
+            print_per_config_header(
+                console,
+                is_reference,
+                options.main_field,
+                config.remark,
+                config.peft,
+                config.peft_lib,
+                metrics,
+            )
+            print_compared_fields([
+                (field, row[field])
+                for field in options.compared_fields
+                if field != options.main_field
+            ])
+            print_main_field(row[options.main_field], reference, options.diff)
 
 
 def data_menu(
@@ -208,3 +192,79 @@ def filter_menu(options: Options, config_names: list[str]) -> Options:
                     break
 
     return options
+
+
+def print_per_config_header(
+    console, is_reference, field, remark, peft, peft_lib, metrics
+):
+    section_text = Text()
+    section_text.append("=" * 50, style="bold black on white")
+    if is_reference:
+        section_text.append("===")
+        section_text.append("REF>", style="bold white on green")
+        section_text.append(f" {field}:")
+    else:
+        section_text.append("======> pred:")
+    section_text.append(f" {remark} ")
+    if peft == "lora":
+        section_text.append(f"{peft}", style="bold green")
+    if peft == "compacter":
+        section_text.append(f"{peft}", style="bold red")
+    if peft == "ia3":
+        section_text.append(f"{peft}", style="bold blue")
+    if peft in ["full", "none"]:
+        section_text.append(f"{peft}", style="bold yellow")
+    section_text.append(f"({peft_lib}) > {metrics}")
+    console.print(section_text)
+
+
+def print_shared_header(console, key, is_reference):
+    heading_text = Text()
+    heading_text.append("=" * 20, style="bold black on grey54")
+    if is_reference:
+        heading_text.append("===")
+        heading_text.append("REF>", style="bold white on green")
+        heading_text.append(f" {key}:")
+    else:
+        heading_text.append(f"======> {key}:")
+    console.print(heading_text)
+
+
+def print_main_field(text, reference, diff):
+    if diff:
+        if reference is not None:
+            print_diff(
+                reference,
+                text,
+            )
+        else:
+            print_text("Diff disabled: no reference")
+    else:
+        print_text(text)
+
+
+def print_compared_fields(key_text_pairs):
+    short_text = ""
+    long_text = ""
+    for i, (key, text) in enumerate(key_text_pairs):
+        text = str(text)
+        if len(text) < 30:
+            atom = f"{key}: {text}"
+            short_text = (
+                f"{atom} | "
+                if short_text == ""
+                else short_text + f"{atom} | "
+                if i < len(key_text_pairs) - 1
+                else short_text + f"{atom}"
+            )
+        else:
+            atom = f"{key}:\n{text}\n"
+            long_text += (
+                f"{atom}\n"
+                if short_text == ""
+                else short_text + f"{atom}\n"
+                if i < len(key_text_pairs) - 1
+                else short_text + f"{atom}"
+            )
+
+    print_text(short_text + long_text)
