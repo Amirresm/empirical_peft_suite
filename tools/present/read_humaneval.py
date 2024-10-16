@@ -121,6 +121,7 @@ def read_humaneval_python_from_file(file, line_limit=1000000):
                 buffer_dict[cursor] += line
             else:
                 buffer_dict[cursor] = line
+    out_list.append(buffer_dict)
 
     return out_list
 
@@ -156,8 +157,18 @@ def read_humaneval_r_from_file(dir):
 
 
 def get_csv(rows, save_path):
+    fields = [
+        "task",
+        "lora(pl)(norm)",
+        "compacter(ah)(norm)",
+        "ia3(pl)(norm)",
+        "none(none)(full)",
+    ]
+    fields = [f for f in fields if f in list(rows[0].keys())]
+    fields.extend([f for f in list(rows[0].keys()) if f not in fields])
+
     with open(save_path, "w", newline="") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=list(rows[0].keys()))
+        writer = csv.DictWriter(csvfile, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)
 
