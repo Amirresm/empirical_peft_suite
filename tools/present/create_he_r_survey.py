@@ -274,21 +274,37 @@ def main():
                 print(f"File {generated_file} not found.")
 
         for model_name in separate_rows:
-            survey_fields.append(map_model_name(model_name))
-            survey_fields.append("Error")
-            survey_fields.append("pass_score")
-            survey_fields.append("logic_score")
-            survey_fields.append("syntax_score")
+            model_id = map_model_name(model_name)
+            survey_fields.append(model_id)
+            survey_fields.append("A" + model_id)
+            survey_fields.append("B" + model_id)
+            survey_fields.append("C" + model_id)
+            survey_fields.append("D" + model_id)
+            # survey_fields.append("error")
+            # survey_fields.append("pass_score")
+            # survey_fields.append("logic_score")
+            # survey_fields.append("syntax_score")
+            first_row = "meta"
+            if first_row not in survey_data:
+                survey_data[first_row] = ["task"]
+            survey_data[first_row].extend([
+                "code",
+                "error",
+                "pass_score",
+                "logic_score",
+                "syntax_score",
+            ])
             for row_name, status, error, output in separate_rows[model_name]:
                 row_name = row_name.strip().replace("/", "_")
                 if row_name not in survey_data:
                     survey_data[row_name] = [row_name]
-                score_fields = [
+                survey_data[row_name].extend([
+                    output,
+                    error if error else "<NO ERR>",
                     "" if status == "OK" else "N/A",
                     "" if status == "Exception" else "N/A",
                     "" if status == "SyntaxError" else "N/A",
-                ]
-                survey_data[row_name].extend([output, error, *score_fields])
+                ])
 
     save_csv(
         list(survey_data.values()),
