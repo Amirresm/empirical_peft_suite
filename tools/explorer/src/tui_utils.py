@@ -31,6 +31,7 @@ class Options:
 
 
 print_repr = False
+print_limit = 250
 
 
 def read_ch():
@@ -155,14 +156,23 @@ def data_menu(
                     )
                 case "g":
                     try:
-                        index = int(input("Enter index: ")) - 1
-                        if 0 <= index < row_count:
-                            options.cursor = index
+                        limit = int(input("Enter index: ")) - 1
+                        if 0 <= limit < row_count:
+                            options.cursor = limit
                         else:
-                            print(index)
+                            print(limit)
                             raise ValueError
                     except ValueError as e:
                         print("Invalid index:", e)
+                        input("Press Enter to continue")
+                case "l":
+                    global print_limit
+                    try:
+                        limit = int(input(f"Enter new limit (current={print_limit}): "))
+                        print_limit = limit
+                    except ValueError as e:
+                        print("Invalid limit:", e)
+                        input("Press Enter to continue")
                 case "s":
                     global print_repr
                     print_repr = not print_repr
@@ -219,20 +229,22 @@ def filter_menu(options: Options, config_names: list[str]) -> Options:
     return options
 
 
-def print_text(string, limit=250):
+def print_text(string):
     global print_repr
+    global print_limit
     if isinstance(string, list):
         string = str(string)
-    if len(string) > limit:
-        string = string[limit:]
+    if len(string) > print_limit:
+        string = string[-print_limit:]
     if print_repr:
         print(repr(string))
     else:
         print(string)
 
 
-def print_diff(string1, string2, limit=250):
+def print_diff(string1, string2):
     global print_repr
+    global print_limit
 
     if isinstance(string1, list):
         string1 = str(string1)
@@ -242,10 +254,10 @@ def print_diff(string1, string2, limit=250):
         string1 = repr(string1)
         string2 = repr(string2)
 
-    if len(string1) > limit:
-        string1 = string1[limit:]
-    if len(string2) > limit:
-        string2 = string2[limit:]
+    if len(string1) > print_limit:
+        string1 = string1[-print_limit:]
+    if len(string2) > print_limit:
+        string2 = string2[-print_limit:]
     console = Console()
     diff = difflib.ndiff(string1, string2)
     diff = list(diff)
