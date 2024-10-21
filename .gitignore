@@ -168,3 +168,6 @@ tags
 
 # ruff
 .ruff_cache
+
+# other
+**/env.sh
