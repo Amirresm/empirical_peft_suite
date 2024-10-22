@@ -74,7 +74,7 @@ def get_he_results(config: ConfigMeta, row: Dict[str, Any]):
             return HEResults.SyntaxError
         return HEResults.Unknown
     elif "spp" in config.dataset:
-        if row["result"] == "OK":
+        if row["result"] == "passed":
             return HEResults.Ok
         elif row["result"] == "failed:":
             return HEResults.Exception
