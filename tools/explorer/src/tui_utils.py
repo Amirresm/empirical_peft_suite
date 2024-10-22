@@ -1,4 +1,5 @@
 import difflib
+from enum import Enum
 import sys
 import termios
 import tty
@@ -24,6 +25,7 @@ class Options:
     cursor: int = 0
     break_loop: bool = False
     config_filter: list[str] = field(default_factory=list)
+    results_filter: str = "None"
     shared_fields: list[str] = field(default_factory=list)
     compared_fields: list[str] = field(default_factory=list)
     main_field: str = "pred"
@@ -53,6 +55,77 @@ def tui_show_all(row: Dict[str, Any]):
     for key, value in row.items():
         print(f"=> {key} ================")
         print_text(value)
+
+
+class HEResults(Enum):
+    Ok = "OK"
+    Exception = "Exception"
+    SyntaxError = "SyntaxError"
+    Unknown = "Unknown"
+
+
+def get_he_results(config: ConfigMeta, row: Dict[str, Any]):
+    if config.dataset == "multiplt-r":
+        if row["status"] == "OK":
+            return HEResults.Ok
+        elif row["status"] == "Exception":
+            return HEResults.Exception
+        elif row["status"] == "SyntaxError":
+            return HEResults.SyntaxError
+        return HEResults.Unknown
+    elif "spp" in config.dataset:
+        if row["result"] == "OK":
+            return HEResults.Ok
+        elif row["result"] == "failed:":
+            return HEResults.Exception
+        elif "failed:" in row["result"]:
+            return HEResults.SyntaxError
+        return HEResults.Unknown
+
+    raise ValueError(f"Unknown dataset for HumanEval: {config.dataset}")
+
+
+def filter_by_results(config: ConfigMeta, row: Dict[str, Any], results_filter: str):
+    if results_filter == "None":
+        return True
+    elif (
+        results_filter == "lca-all"
+        and config.peft in ["lora", "compacter", "ia3"]
+        and get_he_results(config, row) in [HEResults.Ok, HEResults.Exception]
+    ):
+        return True
+    elif (
+        results_filter == "lca-ok"
+        and config.peft in ["lora", "compacter", "ia3"]
+        and get_he_results(config, row) in [HEResults.Ok]
+    ):
+        return True
+    elif (
+        results_filter == "lca-lgc"
+        and config.peft in ["lora", "compacter", "ia3"]
+        and get_he_results(config, row) in [HEResults.Exception]
+    ):
+        return True
+    elif (
+        results_filter == "lc-all"
+        and config.peft in ["lora", "compacter"]
+        and get_he_results(config, row) in [HEResults.Ok, HEResults.Exception]
+    ):
+        return True
+    elif (
+        results_filter == "lc-ok"
+        and config.peft in ["lora", "compacter"]
+        and get_he_results(config, row) in [HEResults.Ok]
+    ):
+        return True
+    elif (
+        results_filter == "lc-lgc"
+        and config.peft in ["lora", "compacter"]
+        and get_he_results(config, row) in [HEResults.Exception]
+    ):
+        return True
+
+    return False
 
 
 def tui_compare(
@@ -86,33 +159,54 @@ def tui_compare(
         )
         print_text(reference_row[key])
 
-    for config, row in config_row_pairs:
-        is_reference = str(config) == options.reference_config_name
-        if (
-            config.remark in options.filter.split("|")
-            and str(config) in options.config_filter
-        ):
-            if reference is not None:
-                metrics = pairwise_metrics(reference, row[options.main_field])
-                metrics = ", ".join([f"{k}={v:.2f}" for k, v in metrics.items()])
-            else:
-                metrics = ""
-
-            print_per_config_header(
-                console,
-                is_reference,
-                options.main_field,
-                config.remark,
-                config.peft,
-                config.peft_lib,
-                metrics,
-            )
-            print_compared_fields([
-                (field, row[field])
-                for field in options.compared_fields
-                if field != options.main_field
+    if (
+        options.results_filter == "None"
+        or (
+            options.results_filter.startswith("lca")
+            and all([
+                filter_by_results(c, r, options.results_filter)
+                for c, r in config_row_pairs
+                if c.peft in ["lora", "compacter", "ia3"]
             ])
-            print_main_field(row[options.main_field], reference, options.diff)
+        )
+        or (
+            options.results_filter.startswith("lc")
+            and all([
+                filter_by_results(c, r, options.results_filter)
+                for c, r in config_row_pairs
+                if c.peft in ["lora", "compacter"]
+            ])
+        )
+    ):
+        for config, row in config_row_pairs:
+            is_reference = str(config) == options.reference_config_name
+            if (
+                config.remark in options.filter.split("|")
+                and str(config) in options.config_filter
+            ):
+                if reference is not None:
+                    metrics = pairwise_metrics(reference, row[options.main_field])
+                    metrics = ", ".join([f"{k}={v:.2f}" for k, v in metrics.items()])
+                else:
+                    metrics = ""
+
+                print_per_config_header(
+                    console,
+                    is_reference,
+                    options.main_field,
+                    config.remark,
+                    config.peft,
+                    config.peft_lib,
+                    metrics,
+                )
+                print_compared_fields([
+                    (field, row[field])
+                    for field in options.compared_fields
+                    if field != options.main_field
+                ])
+                print_main_field(row[options.main_field], reference, options.diff)
+    else:
+        console.print(Text("Filtered out by results filter", style="bold red"))
 
 
 def data_menu(
@@ -180,6 +274,9 @@ def data_menu(
                 case "f":
                     options = filter_menu(options, config_names)
                     break
+                case "r":
+                    options = results_filter_menu(options)
+                    break
                 case _:
                     # input()
                     pass
@@ -224,6 +321,50 @@ def filter_menu(options: Options, config_names: list[str]) -> Options:
                         options.config_filter.append(config_names[selected_index])
 
                 case "q":
+                    break
+
+    return options
+
+
+def results_filter_menu(options: Options) -> Options:
+    console = Console()
+
+    choices = ["None", "lca-all", "lca-ok", "lca-lgc", "lc-all", "lc-ok", "lc-lgc"]
+
+    if options.results_filter in choices:
+        selected_index = choices.index(options.results_filter)
+    else:
+        selected_index = 0
+
+    while True:
+        clear_screen()
+        text = Text()
+        text.append("Filter by results:\n")
+
+        for i, choice in enumerate(choices):
+            label_str = (
+                f"{"O-> " if choice == options.results_filter else ""}{choice}\n"
+            )
+            if selected_index == i:
+                text.append(label_str, style="bold black on white")
+            else:
+                text.append(label_str)
+        console.print(text)
+
+        event = keyboard.read_event(suppress=True)
+        if event.event_type == keyboard.KEY_DOWN:
+            consume_key()
+            key = event.name
+            match key:
+                case "down" | "j":
+                    selected_index = min(selected_index + 1, len(choices) - 1)
+                case "up" | "k":
+                    selected_index = max(selected_index - 1, 0)
+                case "space":
+                    if choices[selected_index] == options.results_filter:
+                        options.results_filter = None
+                    else:
+                        options.results_filter = choices[selected_index]
                     break
 
     return options
