@@ -123,6 +123,7 @@ def generation_decoder_only(
     batch_size,
     ds_instance,
     is_decoder_only,
+    save_path_prefix=None,
 ):
     samples = raw_dataset.select(range(max_predict_samples))
     prompts = []
@@ -225,7 +226,7 @@ def generation_decoder_only(
 
     output_prediction_file = os.path.join(
         save_path,
-        "generated_generations.txt",
+        f"{save_path_prefix}_generations.txt" if save_path_prefix is not None else "generated_generations.txt",
     )
     ensure_path_exists(save_path)
     with open(output_prediction_file, "w") as writer:

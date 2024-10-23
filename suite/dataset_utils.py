@@ -128,6 +128,39 @@ def load_raw_datasets(
     return typing.cast(DatasetDict, raw_datasets), ds_type, ds_instance
 
 
+def load_additional_raw_dataset(
+    ds_files: list[str],
+) -> tuple[DatasetDict, str, str]:
+    extension = ""
+    data_files = {}
+    for ds_file in ds_files:
+        ds_name = ds_file.split("/")[-1].split(".")[0]
+        if ds_file is not None:
+            data_files[ds_name] = ds_file
+            extension = ds_file.split(".")[-1]
+        if extension == "jsonl":
+            extension = "json"
+
+    raw_datasets = load_dataset(
+        extension,
+        data_files=data_files,
+        # cache_dir=model_args.cache_dir,
+        # token=True if model_args.use_auth_token else None,
+    )
+
+    ds_type, ds_instance = detect_type([ds_files[0]])
+
+    if isinstance(raw_datasets, DatasetDict):
+        logger.error("dataset type is unexpected")
+
+    if ds_type == DatasetTypes.UNKNOWN or ds_instance == DatasetInstances.UNKNOWN:
+        raise ValueError(
+            "Dataset type is unknown. Please implement 'detect_type' and 'split_column' functions"
+        )
+
+    return typing.cast(DatasetDict, raw_datasets), ds_type, ds_instance
+
+
 def get_dataset_metadata(
     do_train,
     do_eval,
@@ -500,7 +533,9 @@ def process_dataset(
         )
 
         logger.info(f"{split}_dataset before:\n{dataset}")
-        remove_columns = [col for col in dataset.column_names if col not in ["prompt", "completion"]]
+        remove_columns = [
+            col for col in dataset.column_names if col not in ["prompt", "completion"]
+        ]
         dataset = dataset.map(
             column_preprocessor,
             batched=True,

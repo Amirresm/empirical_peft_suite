@@ -36,6 +36,7 @@ from constants import (
 from dataset_utils import (
     get_dataset_metadata,
     group_dataset,
+    load_additional_raw_dataset,
     load_raw_datasets,
     process_dataset,
 )
@@ -413,6 +414,12 @@ def main():
             preprocessing_num_workers=data_args.preprocessing_num_workers,
         )
 
+    raw_additional_predict_datasets = None
+    if data_args.additional_predict_dataset_paths:
+        ds_paths = data_args.additional_predict_dataset_paths.split(",")
+        raw_additional_predict_datasets, _, _ = load_additional_raw_dataset(ds_paths)
+
+
     if model_args.train_tokenizer and model_args.use_fast_tokenizer:
         logger.info("Training tokenizer...")
         training_corpus = get_training_corpus(
@@ -755,6 +762,59 @@ def main():
             sample_count=max_predict_samples,
             output_dir=training_args.output_dir,
         )
+
+    # generations on additional test sets
+    if (
+        training_args.predict_with_generate
+        and raw_additional_predict_datasets is not None
+    ):
+        for additional_ds_name in raw_additional_predict_datasets.keys():
+            logger.info(f"*** Generate ({additional_ds_name})***")
+            generation_save_dir = (
+                model_args.generation_output_path
+                if model_args.generation_output_path is not None
+                else training_args.output_dir
+            )
+
+            torch.cuda.empty_cache()
+            torch.cuda.reset_max_memory_allocated()
+            torch.cuda.reset_peak_memory_stats()
+            timer = CudaTimer()
+            timer.start()
+            results = generation_decoder_only(
+                model=model,
+                tokenizer=tokenizer,
+                raw_dataset=raw_additional_predict_datasets[additional_ds_name],
+                max_predict_samples=max_predict_samples,
+                max_source_length=data_args.max_source_length,
+                max_new_tokens=model_args.max_new_tokens,
+                padding=padding,
+                save_path=generation_save_dir,
+                metric_rouge=metric_rouge,
+                metric_bleu=metric_bleu,
+                metric_path=data_args.metric_path,
+                ds_instance=ds_instance,
+                is_decoder_only=is_decoder_only,
+                batch_size=misc_args.generation_batch_size,
+                save_path_prefix=additional_ds_name,
+            )
+            elapsed = timer.stop()
+            if elapsed is not None:
+                performance_metrics = {}
+                performance_metrics.update({f"{additional_ds_name}_generate_total_gpu_time": elapsed})
+                peak_memory = (torch.cuda.max_memory_allocated() / 1024**2) / 1000
+                performance_metrics.update({f"{additional_ds_name}_generate_peak_memory": peak_memory})
+                handle_metrics(
+                    prefix=f"{additional_ds_name}_generate_performance",
+                    metrics=performance_metrics,
+                    output_dir=training_args.output_dir,
+                )
+            handle_metrics(
+                prefix=f"{additional_ds_name}_generate",
+                metrics=results,
+                sample_count=max_predict_samples,
+                output_dir=training_args.output_dir,
+            )
 
     ## Humaneval
     num_samples_per_task = data_args.humaneval_num
