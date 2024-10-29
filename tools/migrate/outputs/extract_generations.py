@@ -5,10 +5,17 @@ from typing import Dict
 import tqdm
 from text_utils import DatasetInstances, split_column, join_columns
 
+
 def scan_dir(dir: str):
     datasets = set()
     configs = {}
-    gen_job_datasets = ["spp_30k", "sppu_30k", "multiplt-r", "csn-python"]
+    gen_job_datasets = [
+        "spp_30k",
+        "sppu_30k",
+        "multiplt-r",
+        "csn-python",
+        "rsum-combined",
+    ]
     for model in os.scandir(dir):
         model = model.path
         # model_name = model.split("/")[-1]
@@ -23,11 +30,20 @@ def scan_dir(dir: str):
             for config_path in os.scandir(dataset):
                 config_path = config_path.path
                 if dataset_name in gen_job_datasets:
-                    ds_instance = DatasetInstances.SPP if "spp" in dataset_name else DatasetInstances.MULTIPLT if "multiplt" in dataset_name else DatasetInstances.CSN if "csn" in dataset_name else None
+                    ds_instance = (
+                        DatasetInstances.SPP
+                        if "spp" in dataset_name
+                        else DatasetInstances.MULTIPLT
+                        if "multiplt" in dataset_name
+                        else DatasetInstances.CSN
+                        if "csn" in dataset_name or "rsum" in dataset_name
+                        else None
+                    )
+                    print(f"Processing {ds_instance} in {config_path}")
                     do_the_work(config_path, ds_instance)
-                
 
     return configs, datasets
+
 
 def process_buffer_dict(index, buffer_dict: Dict, ds_instance):
     if not buffer_dict["input"] or not buffer_dict["gold"] or not buffer_dict["pred"]:
@@ -41,9 +57,9 @@ def process_buffer_dict(index, buffer_dict: Dict, ds_instance):
     striped_target = re.sub(r"^[\r\n]", "", target)
     output = join_columns(prompt, striped_pred, ds_instance)
     example = join_columns(prompt, striped_target, ds_instance)
-    
-    inp_tokens = len(prompt.split(' '))
-    out_tokens = len(output.split(' '))
+
+    inp_tokens = len(prompt.split(" "))
+    out_tokens = len(output.split(" "))
     new_tokens = out_tokens - inp_tokens
 
     out = ""
@@ -62,7 +78,10 @@ def process_buffer_dict(index, buffer_dict: Dict, ds_instance):
     out += "--\n\n\n"
     return out
 
-def read_generations_from_file(file, out_file, ds_instance, processed_limit=1000000, total=None):
+
+def read_generations_from_file(
+    file, out_file, ds_instance, processed_limit=1000000, total=None
+):
     bar = tqdm.tqdm(total=total)
     lines = file.readlines()
 
@@ -124,7 +143,6 @@ def read_generations_from_file(file, out_file, ds_instance, processed_limit=1000
             if cursor is None and processed == 0:
                 cursor = "input"
 
-
             if buffer_dict is not None and cursor is not None:
                 if cursor in buffer_dict:
                     buffer_dict[cursor] += line
@@ -133,6 +151,7 @@ def read_generations_from_file(file, out_file, ds_instance, processed_limit=1000
 
             else:
                 continue
+
 
 def do_the_work(dir, ds_instance):
     generation_dir = os.path.join(dir, "gen_output")
@@ -143,12 +162,10 @@ def do_the_work(dir, ds_instance):
             first_char = file.read(1)
             if first_char:
                 print(f"Omitting {generation_file}: File is not empty")
-                return 
-
-
+                return
 
     process_path = os.path.join(dir, "job_report.log")
-    # if generation_dir path exists 
+    # if generation_dir path exists
     if os.path.exists(process_path) and os.path.isdir(generation_dir):
         print(f"Processing {ds_instance} in {dir}")
         with open(process_path, "r") as file:
@@ -162,12 +179,13 @@ def do_the_work(dir, ds_instance):
                 case _:
                     total = None
             read_generations_from_file(
-                    file, 
-                    generation_file,
-                    ds_instance, 
-                    # processed_limit=10,
-                    total=total,
+                file,
+                generation_file,
+                ds_instance,
+                # processed_limit=10,
+                total=total,
             )
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -180,6 +198,7 @@ def main():
 
     else:
         do_the_work(args.input, DatasetInstances.CSN)
+
 
 if __name__ == "__main__":
     main()
