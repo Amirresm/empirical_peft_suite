@@ -1,10 +1,12 @@
 import argparse
+import gzip
 import json
 import os
 import re
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Iterable
 import csv
+import random
 
 
 @dataclass()
@@ -54,35 +56,41 @@ class ConfigMeta:
         return ConfigMeta(**parts)
 
 
-def scan_dirtree(dir: str) -> list[tuple[str, list[ConfigMeta]]]:
-    configs: list[tuple[str, list[ConfigMeta]]] = []
+def scan_dirtree(dir: str, filter_dataset_name: str) -> list[ConfigMeta]:
+    configs: list[ConfigMeta] = []
     for job_path in os.scandir(dir):
         job_path = job_path.path
-        job_name = job_path.split("/")[-1]
+        # job_name = job_path.split("/")[-1]
 
         for model_path in os.scandir(job_path):
             model_path = model_path.path
-            model_name = model_path.split("/")[-1]
+            # model_name = model_path.split("/")[-1]
 
             for dataset_path in os.scandir(model_path):
                 dataset_path = dataset_path.path
                 dataset_name = dataset_path.split("/")[-1]
-                batch = []
-                name = f"{job_name}_{model_name}_{dataset_name}"
+                if filter_dataset_name == dataset_name:
+                    # batch = []
+                    # name = f"{job_name}_{model_name}_{dataset_name}"
 
-                for config_path in os.scandir(dataset_path):
-                    config_path = config_path.path
-                    config_name = config_path.split("/")[-1]
-                    config_meta = ConfigMeta.from_dirname(config_name)
-                    if config_meta is not None:
-                        batch.append(config_meta)
+                    for config_path in os.scandir(dataset_path):
+                        config_path = config_path.path
+                        config_name = config_path.split("/")[-1]
+                        config_meta = ConfigMeta.from_dirname(config_name)
+                        if (
+                            config_meta is not None
+                            and config_meta.remark in ["norm"]
+                            and config_meta.peft in ["lora"]
+                        ):
+                            # batch.append(config_meta)
+                            configs.append(config_meta)
 
-                configs.append((name, batch))
+                    # configs.append((name, batch))
 
     return configs
 
 
-def read_humaneval_python_from_file(file, line_limit=1000000):
+def read_generations(file, line_limit=1000000):
     lines = file.readlines()
     buffer_dict: Dict | None = None
     beginning_regex = re.compile(r"\d+=========")
@@ -91,10 +99,14 @@ def read_humaneval_python_from_file(file, line_limit=1000000):
     out_list = []
 
     keys = [
-        ("->Task:", "task"),
-        ("->Passed:", "passed"),
-        ("->Result:", "result"),
-        ("->Completion:", "completion"),
+        ("->Example:", "example"),
+        ("->Prompt:", "prompt"),
+        ("->Target:", "target"),
+        ("->Pred:", "pred"),
+        ("->Output:", "output"),
+        ("->Inp_Tokens:", "inp_Tokens"),
+        ("->Out_Tokens:", "out_Tokens"),
+        ("->New_Tokens:", "new_Tokens"),
     ]
 
     for line in lines:
@@ -125,51 +137,21 @@ def read_humaneval_python_from_file(file, line_limit=1000000):
     return out_list
 
 
-def read_humaneval_r_from_file(dir):
-    rows = []
-    parent_dir = os.path.dirname(dir)
-    problem_files = os.listdir(os.path.join(parent_dir, "humaneval_r_problems_output"))
-    completion_files = os.listdir(os.path.join(parent_dir, "humaneval_r_problems"))
-    problem_files = sorted(problem_files, key=lambda x: int(x.split("_")[1]))
-    completion_files = sorted(completion_files, key=lambda x: int(x.split("_")[1]))
-    for problem_file, completion_file in zip(problem_files, completion_files):
-        with open(
-            os.path.join(parent_dir, "humaneval_r_problems_output", problem_file), "r"
-        ) as file:
-            problem = json.load(file)
-            problem["stdout"] = problem["results"][0]["stdout"]
-            problem["stderr"] = problem["results"][0]["stderr"]
-            problem["exit_code"] = problem["results"][0]["exit_code"]
-            problem["status"] = problem["results"][0]["status"]
-        with open(
-            os.path.join(parent_dir, "humaneval_r_problems", completion_file), "r"
-        ) as file:
-            completion = json.load(file)
-            completion["completions"] = completion["completions"][0]
-            # completion_str = completion["completions"]
-            # new_comp = ""
-            # add_all = False
-            # for line in completion_str.split("\n"):
-            #     if add_all or not line.strip().startswith("#"):
-            #         new_comp += line + "\n"
-            #         add_all = True
-            # completion["completions"] = new_comp
-
-            prompt_str = completion["prompt"]
-            new_prompt = ""
-            add_all = False
-            for line in prompt_str.split("\n"):
-                if add_all or not line.strip().startswith("#"):
-                    new_prompt += line + "\n"
-                    add_all = True
-            completion["prompt"] = new_prompt
-        row = {
-            **problem,
-            **completion,
-        }
-        rows.append(row)
-
-    return rows
+def stream_jsonl(filename: str) -> Iterable[Dict]:
+    """
+    Parses each jsonl line and yields it as a dictionary
+    """
+    if filename.endswith(".gz"):
+        with open(filename, "rb") as gzfp:
+            with gzip.open(gzfp, "rt") as fp:
+                for line in fp:
+                    if isinstance(line, str) and any(not x.isspace() for x in line):
+                        yield json.loads(line)
+    else:
+        with open(filename, "r") as fp:
+            for line in fp:
+                if any(not x.isspace() for x in line):
+                    yield json.loads(line)
 
 
 def save_csv(rows, fields, save_path):
@@ -187,7 +169,7 @@ def save_csv(rows, fields, save_path):
             writer.writerow({fields[i]: row[i] for i in range(len(fields))})
 
 
-BASE_RESULTS_DIR = os.path.join(os.path.dirname(__file__), "he_r_survey")
+BASE_RESULTS_DIR = os.path.join(os.path.dirname(__file__), "sum_survey")
 
 
 model_name_map = {}
@@ -210,113 +192,117 @@ def main():
     args = parser.parse_args()
 
     base_dir = os.path.abspath(args.input)
-
-    configs = scan_dirtree(args.input)
-
     if not os.path.exists(BASE_RESULTS_DIR):
         os.mkdir(BASE_RESULTS_DIR)
 
-    survey_fields = ["task"]
-    survey_data = {}
+    target_datasets = ["csn-python", "rsum-combined"]
+    original_datasets = {
+        "rsum-combined": "/home/amirreza/projects/ai/data/rsum/Rcombine/test.jsonl",
+        "csn-python": "/home/amirreza/projects/ai/data/CodeSearchNet/python/test.jsonl",
+    }
 
-    for name, config_batch in configs:
-        filter = "norm|infer|full"
-        if len(config_batch) == 0:
-            continue
-        source_file_name = os.listdir(
-            os.path.join(config_batch[0].get_path(base_dir), "gen_output")
-        )
-        source_file_name = [
-            f.split("/")[-1] for f in source_file_name if "humaneval_r_problems" in f
-        ]
-        if len(source_file_name) == 0:
-            continue
-        source_file_name = source_file_name[0]
-        print(f"Working on {name}")
+    for target_dataset in target_datasets:
+        configs = scan_dirtree(args.input, target_dataset)
+        is_R = target_dataset == "rsum-combined"
+        data_per_model = {}
 
-        separate_rows = {}
-
-        for config in config_batch:
-            if config.remark not in filter.split("|"):
-                continue
-            generated_file = os.path.join(
-                config.get_path(base_dir), "gen_output", source_file_name
-            )
-            header_text = f"{config.model}-{config.peft}"
-            if (
-                os.path.isdir(generated_file)
-                and "humaneval_r_problems" in generated_file
+        sample_count = 25
+        random_sample = []
+        for c in configs:
+            if os.path.exists(
+                os.path.join(
+                    c.get_path(base_dir),
+                    "gen_output",
+                    "generated_generations.txt",
+                )
             ):
-                out_list = read_humaneval_r_from_file(generated_file)
-                separate_rows[header_text] = [
-                    (
-                        r["name"],
-                        r["results"][0]["status"],
-                        r["results"][0]["stderr"],
-                        r["prompt"] + r["completions"],
+                with open(
+                    os.path.join(
+                        c.get_path(base_dir),
+                        "gen_output",
+                        "generated_generations.txt",
+                    ),
+                    "r",
+                ) as source_file:
+                    original_samples = list(
+                        stream_jsonl(original_datasets[target_dataset])
                     )
-                    for r in out_list
-                ]
-            elif os.path.exists(generated_file):
-                with open(generated_file, "r") as file:
-                    out_list = read_humaneval_python_from_file(file)
-                separate_rows[header_text] = [
-                    (
-                        r["task"],
-                        "OK"
-                        if r["result"].strip() == "passed"
-                        else r["result"].strip(),
+                    reference_samples = read_generations(source_file)
+                    reference_samples = [
+                        {
+                            **sample,
+                            "original_target": "".join(original["docstring"]),
+                            "original_prompt": "".join(original["code_tokens"])
+                            if is_R
+                            else original["code"],
+                            "index": i,
+                        }
+                        for i, (sample, original) in enumerate(
+                            zip(reference_samples, original_samples)
+                        )
+                    ]
+                    random_sample = random.sample(
+                        reference_samples,
+                        sample_count,
                     )
-                    for r in out_list
-                ]
-            else:
-                print(f"File {generated_file} not found.")
+                    # for sample in random_sample:
+                    #     sample["code"] = original_samples[sample["index"]]
 
-        for model_name in separate_rows:
-            model_id = map_model_name(model_name)
-            survey_fields.append(model_id)
-            survey_fields.append("A" + model_id)
-            survey_fields.append("B" + model_id)
-            survey_fields.append("C" + model_id)
-            survey_fields.append("D" + model_id)
-            # survey_fields.append("error")
-            # survey_fields.append("pass_score")
-            # survey_fields.append("logic_score")
-            # survey_fields.append("syntax_score")
-            first_row = "meta"
-            if first_row not in survey_data:
-                survey_data[first_row] = ["task"]
-            survey_data[first_row].extend([
-                "code",
-                "error",
-                "pass_score",
-                "logic_score",
-                "syntax_score",
-            ])
-            for row_name, status, error, output in separate_rows[model_name]:
-                row_name = row_name.strip().replace("/", "_")
-                if row_name not in survey_data:
-                    survey_data[row_name] = [row_name]
-                survey_data[row_name].extend([
-                    output,
-                    error if error else "<NO ERR>",
-                    "" if status == "OK" else "N/A",
-                    "" if status == "Exception" else "N/A",
-                    "" if status == "SyntaxError" else "N/A",
-                ])
+                    break
 
-    save_csv(
-        list(survey_data.values()),
-        survey_fields,
-        os.path.join(BASE_RESULTS_DIR, "survey.csv"),
-    )
+        # for sample in random_sample:
+        #     print("====")
+        #     print(sample["target"])
+        #     print(sample["original_target"])
 
-    model_map_rows = [[name, id] for name, id in model_name_map.items()]
-    save_csv(
-        model_map_rows,
-        ["model", "id"],
-        os.path.join(BASE_RESULTS_DIR, "model_map.txt"),
-    )
+        for current_config in configs:
+            name = str(current_config)
+            print(f"Working on {name}")
+            source_file_name = os.path.join(
+                current_config.get_path(base_dir),
+                "gen_output",
+                "generated_generations.txt",
+            )
+            if not os.path.exists(source_file_name):
+                print(f"File {source_file_name} does not exist")
+                continue
+            data_per_model[name] = []
+            with open(source_file_name, "r") as source_file:
+                generations = read_generations(source_file)
+                for random_s in random_sample:
+                    data_per_model[name].append(generations[random_s["index"]]["pred"])
+
+        rows = []
+        fields = ["index", "original_prompt", "original_target"]
+        fields += list(data_per_model.keys())
+        for i, s in enumerate(random_sample):
+            index = s["index"]
+            original_prompt = s["original_prompt"].strip()
+            # remove everything between """ and """
+            re_prompt = re.compile(r'""".*?"""', re.DOTALL)
+            original_prompt = re_prompt.sub("", original_prompt)
+
+            original_target = s["original_target"].strip()
+            row = [
+                    index,
+                    original_prompt,
+                    original_target,
+            ]
+            for model in data_per_model.values():
+                row.append(model[i].strip())
+            rows.append(row)
+        save_csv(
+            rows,
+            fields,
+            os.path.join(BASE_RESULTS_DIR, f"{target_dataset}_survey.csv"),
+        )
+
+        # model_map_rows = [[name, id] for name, id in model_name_map.items()]
+        # save_csv(
+        #     model_map_rows,
+        #     ["model", "id"],
+        #     os.path.join(BASE_RESULTS_DIR, f"{target_dataset}_model_map.txt"),
+        # )
 
 
 if __name__ == "__main__":
