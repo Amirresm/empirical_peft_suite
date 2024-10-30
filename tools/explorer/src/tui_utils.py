@@ -24,8 +24,11 @@ class Options:
     filter: str
     cursor: int = 0
     break_loop: bool = False
+
     config_filter: list[str] = field(default_factory=list)
     results_filter: str = "None"
+    filters_executed: bool = False
+
     shared_fields: list[str] = field(default_factory=list)
     compared_fields: list[str] = field(default_factory=list)
     main_field: str = "pred"
@@ -128,6 +131,39 @@ def filter_by_results(config: ConfigMeta, row: Dict[str, Any], results_filter: s
     return False
 
 
+def get_filtered_config_rows_pairs(config_rows_pairs, options: Options):
+    # filtered_config_rows_pairs = [
+    #     crp for crp in config_rows_pairs if str(crp[0]) in options.config_filter
+    # ]
+    filtered_config_rows_pairs = config_rows_pairs
+    new_config_rows_pairs = [(c, []) for c, _ in filtered_config_rows_pairs]
+    for i in range(len(filtered_config_rows_pairs[0][1])):
+        config_row_pairs = [(c, o[i]) for c, o in filtered_config_rows_pairs]
+        if (
+            options.results_filter == "None"
+            or (
+                options.results_filter.startswith("lca-")
+                and all([
+                    filter_by_results(c, r, options.results_filter)
+                    for c, r in config_row_pairs
+                    if c.peft in ["lora", "compacter", "ia3"]
+                ])
+            )
+            or (
+                options.results_filter.startswith("lc-")
+                and all([
+                    filter_by_results(c, r, options.results_filter)
+                    for c, r in config_row_pairs
+                    if c.peft in ["lora", "compacter"]
+                ])
+            )
+        ):
+            for i, (_, r) in enumerate(new_config_rows_pairs):
+                r.append(config_row_pairs[i][1])
+    options.filters_executed = True
+    return new_config_rows_pairs
+
+
 def tui_compare(
     config_row_pairs: list[tuple[ConfigMeta, Dict[str, Any]]],
     options: Options,
@@ -159,54 +195,33 @@ def tui_compare(
         )
         print_text(reference_row[key])
 
-    if (
-        options.results_filter == "None"
-        or (
-            options.results_filter.startswith("lca")
-            and all([
-                filter_by_results(c, r, options.results_filter)
-                for c, r in config_row_pairs
-                if c.peft in ["lora", "compacter", "ia3"]
-            ])
-        )
-        or (
-            options.results_filter.startswith("lc")
-            and all([
-                filter_by_results(c, r, options.results_filter)
-                for c, r in config_row_pairs
-                if c.peft in ["lora", "compacter"]
-            ])
-        )
-    ):
-        for config, row in config_row_pairs:
-            is_reference = str(config) == options.reference_config_name
-            if (
-                config.remark in options.filter.split("|")
-                and str(config) in options.config_filter
-            ):
-                if reference is not None:
-                    metrics = pairwise_metrics(reference, row[options.main_field])
-                    metrics = ", ".join([f"{k}={v:.2f}" for k, v in metrics.items()])
-                else:
-                    metrics = ""
+    for config, row in config_row_pairs:
+        is_reference = str(config) == options.reference_config_name
+        if (
+            config.remark in options.filter.split("|")
+            and str(config) in options.config_filter
+        ):
+            if reference is not None:
+                metrics = pairwise_metrics(reference, row[options.main_field])
+                metrics = ", ".join([f"{k}={v:.2f}" for k, v in metrics.items()])
+            else:
+                metrics = ""
 
-                print_per_config_header(
-                    console,
-                    is_reference,
-                    options.main_field,
-                    config.remark,
-                    config.peft,
-                    config.peft_lib,
-                    metrics,
-                )
-                print_compared_fields([
-                    (field, row[field])
-                    for field in options.compared_fields
-                    if field != options.main_field
-                ])
-                print_main_field(row[options.main_field], reference, options.diff)
-    else:
-        console.print(Text("Filtered out by results filter", style="bold red"))
+            print_per_config_header(
+                console,
+                is_reference,
+                options.main_field,
+                config.remark,
+                config.peft,
+                config.peft_lib,
+                metrics,
+            )
+            print_compared_fields([
+                (field, row[field])
+                for field in options.compared_fields
+                if field != options.main_field
+            ])
+            print_main_field(row[options.main_field], reference, options.diff)
 
 
 def data_menu(
@@ -273,9 +288,13 @@ def data_menu(
                     options.repr = not options.repr
                 case "f":
                     options = filter_menu(options, config_names)
+                    options.filters_executed = False
+                    options.cursor = 0
                     break
                 case "r":
                     options = results_filter_menu(options)
+                    options.filters_executed = False
+                    options.cursor = 0
                     break
                 case _:
                     # input()
@@ -362,7 +381,7 @@ def results_filter_menu(options: Options) -> Options:
                     selected_index = max(selected_index - 1, 0)
                 case "space":
                     if choices[selected_index] == options.results_filter:
-                        options.results_filter = None
+                        options.results_filter = "None"
                     else:
                         options.results_filter = choices[selected_index]
                     break

@@ -351,7 +351,6 @@ def read_humaneval_r_from_file(dir):
             **problem,
             **completion,
         }
-        print(row)
         rows.append(row)
 
     return rows

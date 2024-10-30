@@ -9,7 +9,16 @@ from src.text_utils import (
     read_humaneval_python_from_file,
     read_humaneval_r_from_file,
 )
-from src.tui_utils import Options, data_menu, print_text, tui_compare, tui_show_all
+from src.tui_utils import (
+    Options,
+    data_menu,
+    filter_by_results,
+    get_filtered_config_rows_pairs,
+    get_he_results,
+    print_text,
+    tui_compare,
+    tui_show_all,
+)
 
 for key in logging.Logger.manager.loggerDict:
     print(key)
@@ -74,7 +83,7 @@ def main():
             ):
                 out_list = read_humaneval_r_from_file(generated_file)
                 config_rows_pairs.append((config, out_list))
-                options.shared_fields = ["prompt"]
+                options.shared_fields = ["name","prompt"]
                 options.compared_fields = ["stdout", "stderr", "exit_code", "status"]
                 options.main_field = "completions"
             elif os.path.exists(generated_file):
@@ -101,35 +110,44 @@ def main():
             continue
 
         options.config_filter = [str(c) for c, _ in config_rows_pairs]
-
-        reference_config, reference_row = next(
-            (
-                row
-                for config, row in config_rows_pairs
-                if str(config) == options.reference_config_name
-            ),
-            config_rows_pairs[0],
+        filtered_config_rows_pairs = get_filtered_config_rows_pairs(
+            config_rows_pairs, options
         )
 
         while True:
             clear_screen()
+            if not options.filters_executed:
+                filtered_config_rows_pairs = get_filtered_config_rows_pairs(
+                    config_rows_pairs, options
+                )
+            reference_config, reference_row = next(
+                (
+                    (config, row)
+                    for config, row in filtered_config_rows_pairs
+                    if str(config) == options.reference_config_name
+                ),
+                filtered_config_rows_pairs[0],
+            )
+
             print(
                 f"Showing {reference_config} | {options.cursor + 1}/{len(reference_row)}: {options.mode}"
             )
 
-            config_row_pairs = [(c, o[options.cursor]) for c, o in config_rows_pairs]
             match options.mode:
                 case "all":
                     tui_show_all(reference_row[options.cursor])
                 case "compare":
-                    tui_compare(
-                        config_row_pairs,
-                        options=options,
-                        # options.reference_config_name,
-                        # options.filter,
-                        # options.config_filter,
-                        # options.diff,
-                    )
+                    if len(reference_row) == 0:
+                        print("No data to compare.")
+                    else:
+                        config_row_pairs = [
+                            (c, o[options.cursor])
+                            for c, o in filtered_config_rows_pairs
+                        ]
+                        tui_compare(
+                            config_row_pairs,
+                            options=options,
+                        )
                 case "compare-within":
                     for key in ["prompt", "target", "pred"]:
                         print(f"=> {key} ================")
@@ -146,7 +164,7 @@ def main():
             options = data_menu(
                 options,
                 prompter=prompter,
-                config_names=[str(c) for c, _ in config_rows_pairs],
+                config_names=[str(c) for c, _ in filtered_config_rows_pairs],
                 row_count=len(reference_row),
             )
 
