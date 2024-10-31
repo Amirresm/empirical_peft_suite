@@ -1,8 +1,9 @@
 import logging
 import os
 import argparse
+from typing import Literal
 
-from src.fs_tools import scan_dirtree
+from src.fs_tools import load_cache_from_disk, save_cache_to_disk, scan_dirtree
 from src.tui import Prompter, clear_screen
 from src.text_utils import (
     read_generations_from_file,
@@ -12,9 +13,7 @@ from src.text_utils import (
 from src.tui_utils import (
     Options,
     data_menu,
-    filter_by_results,
     get_filtered_config_rows_pairs,
-    get_he_results,
     print_text,
     tui_compare,
     tui_show_all,
@@ -23,86 +22,117 @@ from src.tui_utils import (
 for key in logging.Logger.manager.loggerDict:
     print(key)
 
+CACHE_DIRECTORY = os.path.join(os.path.dirname(__file__), "cache")
+
+
+def load_from_data(
+    prompter, configs, base_dir
+) -> tuple[list | Literal["break"] | Literal["continue"], Options | None, str]:
+    choice = prompter.prompt()
+    if choice in ["exit", "q"]:
+        return "break", None, ""
+    print(f"Query: {choice}")
+
+    options = Options(
+        reference_config_name=None,
+        diff=False,
+        repr=False,
+        mode="compare",
+        filter="norm|infer|full",
+    )
+
+    config_batch = next((c for name, c in configs if name == choice), None)
+    if config_batch is None:
+        print("No such config found.")
+        return "continue", None, ""
+    config_rows_pairs = []
+
+    source_file_name = os.listdir(
+        os.path.join(config_batch[0].get_path(base_dir), "gen_output")
+    )
+    source_file_name = [
+        f.split("/")[-1]
+        for f in source_file_name
+        if f.endswith(".txt") or "humaneval_r_problems" in f
+    ]
+    source_file_name = prompter.prompt(
+        message="Select source file: ", data=source_file_name
+    )
+    for config in config_batch:
+        if config.remark not in options.filter.split("|"):
+            continue
+        generated_file = os.path.join(
+            config.get_path(base_dir), "gen_output", source_file_name
+        )
+        if os.path.isdir(generated_file) and "humaneval_r_problems" in generated_file:
+            out_list = read_humaneval_r_from_file(generated_file)
+            config_rows_pairs.append((config, out_list))
+            options.shared_fields = ["name", "prompt"]
+            options.compared_fields = ["stdout", "stderr", "exit_code", "status"]
+            options.main_field = "completions"
+        elif os.path.exists(generated_file):
+            if source_file_name == "generated_humaneval.txt":
+                with open(generated_file, "r") as file:
+                    out_list = read_humaneval_python_from_file(file)
+                config_rows_pairs.append((config, out_list))
+                options.shared_fields = ["task"]
+                options.compared_fields = ["result"]
+                options.main_field = "completion"
+            else:
+                with open(generated_file, "r") as file:
+                    out_list = read_generations_from_file(file)
+                config_rows_pairs.append((config, out_list))
+                options.shared_fields = ["prompt", "target"]
+                options.compared_fields = ["pred"]
+                options.main_field = "pred"
+        else:
+            print(f"File {generated_file} not found.")
+
+    save_cache_to_disk(config_rows_pairs, options, CACHE_DIRECTORY, choice)
+    return config_rows_pairs, options, choice
+
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", type=str, required=True)
-    parser.add_argument("--recursive", type=bool, default=False, required=False)
+    parser.add_argument("--input", type=str, required=False)
     args = parser.parse_args()
 
-    # convert to absolute path
-    base_dir = os.path.abspath(args.input)
+    if not os.path.exists(CACHE_DIRECTORY):
+        os.makedirs(CACHE_DIRECTORY)
 
-    configs = scan_dirtree(args.input)
-
-    bank = [c for c, _ in configs]
-
-    prompter = Prompter(bank)
+    base_dir = None
+    configs = None
+    if args.input is not None:
+        base_dir = os.path.abspath(args.input)
+        configs = scan_dirtree(args.input)
+        bank = [c for c, _ in configs]
+        prompter = Prompter(bank)
+    else:
+        # reading from cache
+        cache_entries = os.listdir(CACHE_DIRECTORY)
+        prompter = Prompter(cache_entries)
 
     while True:
         clear_screen()
-        choice = prompter.prompt()
-        if choice in ["exit", "q"]:
-            break
-        print(f"Query: {choice}")
 
-        options = Options(
-            reference_config_name=None,
-            diff=False,
-            repr=False,
-            mode="compare",
-            filter="norm|infer|full",
-        )
-
-        config_batch = next((c for name, c in configs if name == choice), None)
-        if config_batch is None:
-            print("No such config found.")
-            continue
-        config_rows_pairs = []
-
-        source_file_name = os.listdir(
-            os.path.join(config_batch[0].get_path(base_dir), "gen_output")
-        )
-        source_file_name = [
-            f.split("/")[-1]
-            for f in source_file_name
-            if f.endswith(".txt") or "humaneval_r_problems" in f
-        ]
-        source_file_name = prompter.prompt(
-            message="Select source file: ", data=source_file_name
-        )
-        for config in config_batch:
-            if config.remark not in options.filter.split("|"):
-                continue
-            generated_file = os.path.join(
-                config.get_path(base_dir), "gen_output", source_file_name
+        view_name = ""
+        if args.input is not None and configs is not None and base_dir:
+            config_rows_pairs, options, view_name = load_from_data(
+                prompter, configs, base_dir
             )
-            if (
-                os.path.isdir(generated_file)
-                and "humaneval_r_problems" in generated_file
-            ):
-                out_list = read_humaneval_r_from_file(generated_file)
-                config_rows_pairs.append((config, out_list))
-                options.shared_fields = ["name","prompt"]
-                options.compared_fields = ["stdout", "stderr", "exit_code", "status"]
-                options.main_field = "completions"
-            elif os.path.exists(generated_file):
-                if source_file_name == "generated_humaneval.txt":
-                    with open(generated_file, "r") as file:
-                        out_list = read_humaneval_python_from_file(file)
-                    config_rows_pairs.append((config, out_list))
-                    options.shared_fields = ["task"]
-                    options.compared_fields = ["result"]
-                    options.main_field = "completion"
-                else:
-                    with open(generated_file, "r") as file:
-                        out_list = read_generations_from_file(file)
-                    config_rows_pairs.append((config, out_list))
-                    options.shared_fields = ["prompt", "target"]
-                    options.compared_fields = ["pred"]
-                    options.main_field = "pred"
-            else:
-                print(f"File {generated_file} not found.")
+        else:
+            choice = prompter.prompt()
+            if choice in ["exit", "q"]:
+                break
+
+            config_rows_pairs, options, view_name = load_cache_from_disk(
+                os.path.join(CACHE_DIRECTORY, choice)
+            )
+
+        if config_rows_pairs == "break":
+            break
+        if config_rows_pairs == "continue" or options is None:
+            continue
 
         if len(config_rows_pairs) == 0:
             print("No generations found.")

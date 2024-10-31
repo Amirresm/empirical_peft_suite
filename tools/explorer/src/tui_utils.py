@@ -34,6 +34,28 @@ class Options:
     main_field: str = "pred"
     all_fields: list[str] = field(default_factory=list)
 
+    def to_dict(self):
+        return {
+            "reference_config_name": self.reference_config_name,
+            "diff": self.diff,
+            "repr": self.repr,
+            "mode": self.mode,
+            "filter": self.filter,
+            "cursor": self.cursor,
+            "break_loop": self.break_loop,
+            "config_filter": self.config_filter,
+            "results_filter": self.results_filter,
+            "filters_executed": self.filters_executed,
+            "shared_fields": self.shared_fields,
+            "compared_fields": self.compared_fields,
+            "main_field": self.main_field,
+            "all_fields": self.all_fields,
+        }
+
+    @staticmethod
+    def from_dict(data: dict):
+        return Options(**data)
+
 
 print_repr = False
 print_limit = 250

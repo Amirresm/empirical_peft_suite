@@ -27,6 +27,20 @@ class ConfigMeta:
     def __str__(self):
         return self._dirname
 
+    def to_dict(self):
+        return {
+            "remark": self.remark,
+            "job": self.job,
+            "model": self.model,
+            "dataset": self.dataset,
+            "peft_lib": self.peft_lib,
+            "peft": self.peft,
+        }
+
+    @staticmethod
+    def from_dict(data: dict):
+        return ConfigMeta(**data)
+
     @staticmethod
     def from_dirname(dirname: str):
         match = re.search("(spp.*k)", dirname)
