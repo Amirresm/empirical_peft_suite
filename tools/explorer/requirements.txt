@@ -1,6 +1,6 @@
 codebleu==0.7.0
 evaluate==0.4.2
-keyboard
+# keyboard
 prompt_toolkit
 fuzzyfinder
 rich

@@ -6,7 +6,7 @@ import tty
 from dataclasses import dataclass, field
 from typing import Any, Dict
 
-import keyboard
+# import keyboard
 from rich.console import Console
 from rich.text import Text
 
@@ -73,7 +73,21 @@ def read_ch():
 
 
 def consume_key():
-    read_ch()
+    ch = read_ch()
+    if ch == " ":
+        return "space"
+    if ch == "\x1b":
+        if read_ch() == "[":
+            if read_ch() == "A":
+                return "up"
+            if read_ch() == "B":
+                return "down"
+            if read_ch() == "C":
+                return "right"
+            if read_ch() == "D":
+                return "left"
+
+    return ch
 
 
 def tui_show_all(row: Dict[str, Any]):
@@ -259,10 +273,10 @@ def data_menu(
         "compare-within",
     ]
     while True:
-        event = keyboard.read_event()
-        if event.event_type == keyboard.KEY_DOWN:
-            consume_key()
-            key = event.name
+        # event = keyboard.read_event()
+        # if event.event_type == keyboard.KEY_DOWN:
+        key = consume_key()
+        if True:
             match key:
                 case "0":
                     options.reference_config_name = None
@@ -346,10 +360,13 @@ def filter_menu(options: Options, config_names: list[str]) -> Options:
                 text.append(config_str)
         console.print(text)
 
-        event = keyboard.read_event(suppress=True)
-        if event.event_type == keyboard.KEY_DOWN:
-            consume_key()
-            key = event.name
+        # event = keyboard.read_event(suppress=True)
+        # if event.event_type == keyboard.KEY_DOWN:
+        #     consume_key()
+        #     key = event.name
+        #     match key:
+        key = consume_key()
+        if True:
             match key:
                 case "down" | "j":
                     selected_index = min(selected_index + 1, len(config_names) - 1)
@@ -392,10 +409,13 @@ def results_filter_menu(options: Options) -> Options:
                 text.append(label_str)
         console.print(text)
 
-        event = keyboard.read_event(suppress=True)
-        if event.event_type == keyboard.KEY_DOWN:
-            consume_key()
-            key = event.name
+        # event = keyboard.read_event(suppress=True)
+        # if event.event_type == keyboard.KEY_DOWN:
+        #     consume_key()
+        #     key = event.name
+        #     match key:
+        key = consume_key()
+        if True:
             match key:
                 case "down" | "j":
                     selected_index = min(selected_index + 1, len(choices) - 1)
