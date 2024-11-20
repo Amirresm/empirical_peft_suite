@@ -80,7 +80,8 @@ def scan_dirtree(dir: str, filter_dataset_name: str) -> list[ConfigMeta]:
                         if (
                             config_meta is not None
                             and config_meta.remark in ["norm"]
-                            and config_meta.peft in ["lora"]
+                            and config_meta.model in ["codellama-7b", "codet5-base"]
+                            and config_meta.peft in ["lora", "compacter"]
                         ):
                             # batch.append(config_meta)
                             configs.append(config_meta)
@@ -206,7 +207,7 @@ def main():
         is_R = target_dataset == "rsum-combined"
         data_per_model = {}
 
-        sample_count = 25
+        sample_count = 50
         random_sample = []
         for c in configs:
             if os.path.exists(
