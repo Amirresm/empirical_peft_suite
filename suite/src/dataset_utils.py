@@ -11,7 +11,7 @@ from constants import (
     DatasetTypes,
     summarization_name_mapping,
 )
-from text_utils import (
+from src.text_utils import (
     csn_create_prompt,
     csn_join,
     join_columns,
@@ -20,7 +20,7 @@ from text_utils import (
     split_column,
     spp_split,
 )
-from logging_utils import logger
+from src.logging_utils import logger
 
 
 def detect_type(files: list[str | None]):

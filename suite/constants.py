@@ -2,7 +2,6 @@
 from transformers import (
     MBartTokenizer,
     MBartTokenizerFast,
-    # MBart50Tokenizer,
     MBart50TokenizerFast,
 )
 
@@ -10,7 +9,6 @@ from transformers import (
 MULTILINGUAL_TOKENIZERS = [
     MBartTokenizer,
     MBartTokenizerFast,
-    # MBart50Tokenizer,
     MBart50TokenizerFast,
 ]
 

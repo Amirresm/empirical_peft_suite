@@ -3,7 +3,7 @@ import os
 from adapters import AutoAdapterModel
 
 from constants import MULTILINGUAL_TOKENIZERS
-from logging_utils import logger
+from src.logging_utils import logger
 
 import torch
 from transformers import (

@@ -11,10 +11,10 @@ from lib.codeeval.core.data import stream_jsonl
 from lib.codeeval.human_eval.evaluation import evaluate_functional_correctness
 from lib.codeeval.core import run_eval
 
-from evaluation_utils import calc_all_metrics
-from general_utits import ensure_path_exists
-from logging_utils import logger
-from text_utils import (
+from src.evaluation_utils import calc_all_metrics
+from src.general_utits import ensure_path_exists
+from src.logging_utils import logger
+from src.text_utils import (
     fix_indents,
     get_humaneval_prompter,
     join_columns,

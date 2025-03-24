@@ -1,8 +1,8 @@
 import os
-from general_utits import ensure_path_exists
-from logging_utils import logger
+from src.general_utits import ensure_path_exists
+from src.logging_utils import logger
 import adapters
-from advf_utils import freeze_adapter
+from src.advf_utils import freeze_adapter
 
 
 def get_ah_config(adapter_config):
@@ -19,7 +19,7 @@ def get_ah_config(adapter_config):
             return adapters.IA3Config()
 
         case "lora":
-            return adapters.LoRAConfig( # https://www.anyscale.com/blog/fine-tuning-llms-lora-or-full-parameter-an-in-depth-analysis-with-llama-2#hyperparameters
+            return adapters.LoRAConfig(
                 # r=16,
                 alpha=16,
                 dropout=0.05,

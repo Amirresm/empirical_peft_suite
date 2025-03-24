@@ -4,7 +4,7 @@ from logging_utils import logger
 import numpy as np
 import nltk
 
-from text_utils import clean_whitespaces_generations, split_column
+from src.text_utils import clean_whitespaces_generations, split_column
 
 
 def compute_metrics_preprocessor(preds, labels, ds_instance, is_decoder_only):

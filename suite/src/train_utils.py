@@ -1,4 +1,4 @@
-from general_utits import log_metrics, save_metrics
+from src.general_utits import log_metrics, save_metrics
 
 
 def handle_metrics(prefix, metrics, output_dir, sample_count = None, trainer = None):

@@ -6,7 +6,7 @@ import datetime
 from filelock import FileLock
 import nltk
 
-from logging_utils import logger
+from src.logging_utils import logger
 
 import adapters
 import accelerate

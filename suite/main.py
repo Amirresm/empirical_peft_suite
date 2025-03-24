@@ -15,45 +15,46 @@ from transformers import (
     set_seed,
 )
 
-# from trl import DataCollatorForCompletionOnlyLM, SFTConfig, SFTTrainer
-
-from adapter_utils import (
+from src.adapter_utils import (
     init_ah_adapter,
     init_ah_advfusion,
     load_ah_adapter,
     save_ah_adapter,
 )
-from advf_utils import (
+from src.advf_utils import (
     unfreeze_reload_adapter,
     zero_freeze_adapter,
 )
-from arg_utils import parse_arguments
+from src.arg_utils import parse_arguments
 from constants import (
     COMPLETION_COL,
     PROMPT_COL,
     DatasetInstances,
 )
-from dataset_utils import (
+from src.dataset_utils import (
     get_dataset_metadata,
     group_dataset,
     load_additional_raw_dataset,
     load_raw_datasets,
     process_dataset,
 )
-from evaluation_utils import get_compute_metrics, preprocess_logits_for_metrics
-from general_utits import (
+from src.evaluation_utils import (
+    get_compute_metrics,
+    preprocess_logits_for_metrics,
+)
+from src.general_utits import (
     CudaTimer,
     check_dependencies,
     check_nltk_data,
     check_version,
     handle_last_checkpoint,
 )
-from generation_utils import (
+from src.generation_utils import (
     generation_decoder_only,
     generation_from_predict_encoder_decoder,
     run_humaneval,
 )
-from init_utils import (
+from src.init_utils import (
     ensure_decoder_only_padding_token,
     ensure_decoder_start_token,
     ensure_embedding_size,
@@ -64,9 +65,9 @@ from init_utils import (
     init_tokenizer,
     train_tokenizer,
 )
-from logging_utils import logger, setup_logging
-from peft_utils import init_and_load_peft_adapter, init_peft_adapter
-from train_utils import handle_metrics
+from src.logging_utils import logger, setup_logging
+from src.peft_utils import init_and_load_peft_adapter, init_peft_adapter
+from src.train_utils import handle_metrics
 
 has_codebleu = False
 # try:
@@ -90,9 +91,14 @@ def main():
 
     torch.cuda.empty_cache()
 
-    model_args, data_args, training_args, adapter_args, advfusion_args, misc_args = (
-        parse_arguments()
-    )
+    (
+        model_args,
+        data_args,
+        training_args,
+        adapter_args,
+        advfusion_args,
+        misc_args,
+    ) = parse_arguments()
 
     advadp_path_list: list[str] = advfusion_args.advadp_path_list
 
@@ -149,7 +155,9 @@ def main():
     [h.flush() for h in logger.handlers]
 
     rename_all_results = False
-    if os.path.exists(os.path.join(training_args.output_dir, "all_results.json")):
+    if os.path.exists(
+        os.path.join(training_args.output_dir, "all_results.json")
+    ):
         if rename_all_results:
             logger.info(
                 f"all_results.json exists in {training_args.output_dir}, renaming to old_all_results.json"
@@ -243,7 +251,9 @@ def main():
                 )
             logger.info("Adapter Summary:\n")
             model.print_trainable_parameters()
-            if hasattr(model, "get_model_status") and callable(model.get_model_status):
+            if hasattr(model, "get_model_status") and callable(
+                model.get_model_status
+            ):
                 logger.info(f"Model Status:\n{model.get_model_status()}")
             # if hasattr(model, "get_layer_status") and callable(model.get_layer_status):
             #     logger.info(f"Layer Status:\n{model.get_layer_status()}")
@@ -306,7 +316,9 @@ def main():
     tokenizer.save_pretrained(model_args.tokenizer_name_or_path)
     logger.info(f"Tokenizer saved to {model_args.tokenizer_name_or_path}")
 
-    prefix = data_args.source_prefix if data_args.source_prefix is not None else ""
+    prefix = (
+        data_args.source_prefix if data_args.source_prefix is not None else ""
+    )
     max_train_samples = data_args.max_train_samples
     train_dataset = None
     if training_args.do_train:
@@ -417,8 +429,9 @@ def main():
     raw_additional_predict_datasets = None
     if data_args.additional_predict_dataset_paths:
         ds_paths = data_args.additional_predict_dataset_paths.split(",")
-        raw_additional_predict_datasets, _, _ = load_additional_raw_dataset(ds_paths)
-
+        raw_additional_predict_datasets, _, _ = load_additional_raw_dataset(
+            ds_paths
+        )
 
     if model_args.train_tokenizer and model_args.use_fast_tokenizer:
         logger.info("Training tokenizer...")
@@ -471,7 +484,9 @@ def main():
     # sft_trainer: SFTTrainer | None = None
     if training_args.do_train or training_args.do_eval:
         if adapter_args.train_adapter and adapter_args.use_adapterhub:
-            trainer_class = AdapterTrainer if is_decoder_only else Seq2SeqAdapterTrainer
+            trainer_class = (
+                AdapterTrainer if is_decoder_only else Seq2SeqAdapterTrainer
+            )
         else:
             trainer_class = Trainer if is_decoder_only else Seq2SeqTrainer
 
@@ -488,35 +503,18 @@ def main():
             ),
         )
 
-        # if use_sft and is_decoder_only:
-        #     response_template_with_context = "\n### Assistant:"
-        #     response_template_ids = tokenizer.encode(
-        #         response_template_with_context, add_special_tokens=False
-        #     )[2:]
-        #     sft_data_collator = DataCollatorForCompletionOnlyLM(
-        #         response_template_ids, tokenizer=tokenizer
-        #     )
-
-        #     sft_args = SFTConfig(
-        #         output_dir=training_args.output_dir,
-        #     )
-        #     sft_trainer = SFTTrainer(
-        #         model=model,
-        #         args=sft_args,
-        #         train_dataset=train_dataset,
-        #         eval_dataset=eval_dataset,
-        #         tokenizer=tokenizer,
-        #         data_collator=sft_data_collator,
-        #         compute_metrics=compute_metrics,
-        #         preprocess_logits_for_metrics=preprocess_logits_for_metrics,
-        #     )
-
         # Early stopping
-        if training_args.do_eval and data_args.patience and data_args.patience > 0:
+        if (
+            training_args.do_eval
+            and data_args.patience
+            and data_args.patience > 0
+        ):
             logger.info(
                 f"metric for choosing best model is {training_args.metric_for_best_model}"
             )
-            callback = EarlyStoppingCallback(early_stopping_patience=data_args.patience)
+            callback = EarlyStoppingCallback(
+                early_stopping_patience=data_args.patience
+            )
             trainer.add_callback(callback)
             training_args.load_best_model_at_end = True
 
@@ -534,7 +532,9 @@ def main():
             checkpoint = last_checkpoint
 
         if adapter_args.adapter_config == "advfusion":
-            zero_freeze_adapter(model, advfusion_args.target_adapter_name, model_dtype)
+            zero_freeze_adapter(
+                model, advfusion_args.target_adapter_name, model_dtype
+            )
 
         torch.cuda.empty_cache()
         torch.cuda.reset_max_memory_allocated()
@@ -694,7 +694,11 @@ def main():
         labels = predict_results.label_ids
         preds = predict_results.predictions
 
-        if labels is not None and preds is not None and trainer.is_world_process_zero():
+        if (
+            labels is not None
+            and preds is not None
+            and trainer.is_world_process_zero()
+        ):
             if training_args.predict_with_generate:
                 generation_save_dir = (
                     model_args.generation_output_path
@@ -801,9 +805,15 @@ def main():
             elapsed = timer.stop()
             if elapsed is not None:
                 performance_metrics = {}
-                performance_metrics.update({f"{additional_ds_name}_generate_total_gpu_time": elapsed})
-                peak_memory = (torch.cuda.max_memory_allocated() / 1024**2) / 1000
-                performance_metrics.update({f"{additional_ds_name}_generate_peak_memory": peak_memory})
+                performance_metrics.update(
+                    {f"{additional_ds_name}_generate_total_gpu_time": elapsed}
+                )
+                peak_memory = (
+                    torch.cuda.max_memory_allocated() / 1024**2
+                ) / 1000
+                performance_metrics.update(
+                    {f"{additional_ds_name}_generate_peak_memory": peak_memory}
+                )
                 handle_metrics(
                     prefix=f"{additional_ds_name}_generate_performance",
                     metrics=performance_metrics,
@@ -863,11 +873,6 @@ def main():
                 metrics=results,
                 output_dir=training_args.output_dir,
             )
-
-
-def _mp_fn(index):
-    # For xla_spawn (TPUs)
-    main()
 
 
 if __name__ == "__main__":
