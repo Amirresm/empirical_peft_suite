@@ -1,8 +1,11 @@
+import os
 import argparse
 from typing import Dict
 import tqdm
 from bleu2.calc_bleu2 import calculate_bleu2
 import evaluate
+
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
 keys = [
     ("->Prompt:", "prompt"),
@@ -16,8 +19,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=str, required=True)
     args = parser.parse_args()
-    metric_bleu = "/home/amirreza/projects/ubc/peft_suite/suite/lib/bleu/bleu.py"
-    metric_rouge = "/home/amirreza/projects/ubc/peft_suite/suite/lib/rouge/rouge.py"
+    metric_bleu = f"{SCRIPT_DIR}/bleu/bleu.py"
+    metric_rouge = f"{SCRIPT_DIR}/rouge/rouge.py"
 
     metric_bleu = evaluate.load(path=metric_bleu)
     metric_rouge = evaluate.load(path=metric_rouge)

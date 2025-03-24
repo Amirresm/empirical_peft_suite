@@ -17,31 +17,41 @@ class ModelArguments:
 
     config_title: str = field(
         metadata={
-            "help": "Title of this configuration. Will be used to save the configuration file."
+            "help": (
+                "Title of this configuration. Will be used to save the configuration file."
+            )
         }
     )
 
     model_name_or_path: str = field(
         metadata={
-            "help": "Path to pretrained model or model identifier from huggingface.co/models"
+            "help": (
+                "Path to pretrained model or model identifier from huggingface.co/models"
+            )
         }
     )
     config_name: Optional[str] = field(
         default=None,
         metadata={
-            "help": "Pretrained config name or path if not the same as model_name"
+            "help": (
+                "Pretrained config name or path if not the same as model_name"
+            )
         },
     )
     tokenizer_name_or_path: Optional[str] = field(
         default=None,
         metadata={
-            "help": "Pretrained tokenizer name or path if not the same as model_name"
+            "help": (
+                "Pretrained tokenizer name or path if not the same as model_name"
+            )
         },
     )
     cache_dir: Optional[str] = field(
         default=None,
         metadata={
-            "help": "Where to store the pretrained models downloaded from huggingface.co"
+            "help": (
+                "Where to store the pretrained models downloaded from huggingface.co"
+            )
         },
     )
 
@@ -68,13 +78,17 @@ class ModelArguments:
     use_fast_tokenizer: bool = field(
         default=True,
         metadata={
-            "help": "Whether to use one of the fast tokenizer (backed by the tokenizers library) or not."
+            "help": (
+                "Whether to use one of the fast tokenizer (backed by the tokenizers library) or not."
+            )
         },
     )
     model_revision: str = field(
         default="main",
         metadata={
-            "help": "The specific model version to use (can be a branch name, tag name or commit id)."
+            "help": (
+                "The specific model version to use (can be a branch name, tag name or commit id)."
+            )
         },
     )
     use_auth_token: bool = field(
@@ -117,24 +131,32 @@ class DataTrainingArguments:
 
     dataset_name: Optional[str] = field(
         default=None,
-        metadata={"help": "The name of the dataset to use (via the datasets library)."},
+        metadata={
+            "help": "The name of the dataset to use (via the datasets library)."
+        },
     )
     dataset_config_name: Optional[str] = field(
         default=None,
         metadata={
-            "help": "The configuration name of the dataset to use (via the datasets library)."
+            "help": (
+                "The configuration name of the dataset to use (via the datasets library)."
+            )
         },
     )
     text_column: Optional[str] = field(
         default=None,
         metadata={
-            "help": "The name of the column in the datasets containing the full texts (for summarization)."
+            "help": (
+                "The name of the column in the datasets containing the full texts (for summarization)."
+            )
         },
     )
     summary_column: Optional[str] = field(
         default=None,
         metadata={
-            "help": "The name of the column in the datasets containing the summaries (for summarization)."
+            "help": (
+                "The name of the column in the datasets containing the summaries (for summarization)."
+            )
         },
     )
     text_tokenized: bool = field(
@@ -147,7 +169,9 @@ class DataTrainingArguments:
     )
     train_file: Optional[str] = field(
         default=None,
-        metadata={"help": "The input training data file (a jsonlines or csv file)."},
+        metadata={
+            "help": "The input training data file (a jsonlines or csv file)."
+        },
     )
     validation_file: Optional[str] = field(
         default=None,
@@ -160,14 +184,14 @@ class DataTrainingArguments:
     test_file: Optional[str] = field(
         default=None,
         metadata={
-            "help": "An optional input test data file to evaluate the metrics (rouge) on (a jsonlines or csv file)."
+            "help": (
+                "An optional input test data file to evaluate the metrics (rouge) on (a jsonlines or csv file)."
+            )
         },
     )
     additional_predict_dataset_paths: Optional[str] = field(
         default="",
-        metadata={
-            "help": "An optional list of paths for additional datasets"
-        },
+        metadata={"help": "An optional list of paths for additional datasets"},
     )
     overwrite_cache: bool = field(
         default=False,
@@ -175,7 +199,9 @@ class DataTrainingArguments:
     )
     preprocessing_num_workers: Optional[int] = field(
         default=None,
-        metadata={"help": "The number of processes to use for the preprocessing."},
+        metadata={
+            "help": "The number of processes to use for the preprocessing."
+        },
     )
     max_source_length: Optional[int] = field(
         default=1024,
@@ -245,11 +271,11 @@ class DataTrainingArguments:
     )
     metric_path: Optional[str] = field(
         default=None,
-        metadata={"help": ("Metric path")},
+        metadata={"help": "Metric path"},
     )
     metric_path_alt: Optional[str] = field(
         default=None,
-        metadata={"help": ("Alternative metric path")},
+        metadata={"help": "Alternative metric path"},
     )
     num_beams: Optional[int] = field(
         default=None,
@@ -263,13 +289,17 @@ class DataTrainingArguments:
     ignore_pad_token_for_loss: bool = field(
         default=True,
         metadata={
-            "help": "Whether to ignore the tokens corresponding to padded labels in the loss computation or not."
+            "help": (
+                "Whether to ignore the tokens corresponding to padded labels in the loss computation or not."
+            )
         },
     )
     source_prefix: Optional[str] = field(
         default="",
         metadata={
-            "help": "A prefix to add before every source text (useful for T5 models)."
+            "help": (
+                "A prefix to add before every source text (useful for T5 models)."
+            )
         },
     )
 
@@ -295,7 +325,7 @@ class DataTrainingArguments:
 
     humaneval_num: Optional[int] = field(
         default=0,
-        metadata={"help": ("Number of humaneval samples (k)")},
+        metadata={"help": "Number of humaneval samples (k)"},
     )
 
     def __post_init__(self):
@@ -317,11 +347,6 @@ class DataTrainingArguments:
                 ], "`train_file` should be a csv or a json file."
             if self.validation_file is not None:
                 extension = self.validation_file.split(".")[-1]
-                # assert extension in [
-                #     "csv",
-                #     "json",
-                #     "jsonl",
-                # ], "`validation_file` should be a csv or a json file."
         if self.val_max_target_length is None:
             self.val_max_target_length = self.max_target_length
 
@@ -329,10 +354,12 @@ class DataTrainingArguments:
 @dataclass
 class AdapterArguments:
     use_adapterhub: bool = field(
-        default=False, metadata={"help": "Use adapterhub for peft implementation"}
+        default=False,
+        metadata={"help": "Use adapterhub for peft implementation"},
     )
     train_adapter: bool = field(
-        default=False, metadata={"help": "Train an adapter instead of the full model."}
+        default=False,
+        metadata={"help": "Train an adapter instead of the full model."},
     )
     load_adapter: Optional[str] = field(
         default="",
@@ -341,7 +368,9 @@ class AdapterArguments:
     adapter_config: Optional[str] = field(
         default="seq_bn",
         metadata={
-            "help": "Adapter configuration. Either a config string or a path to a file."
+            "help": (
+                "Adapter configuration. Either a config string or a path to a file."
+            )
         },
     )
 
@@ -354,12 +383,12 @@ class AdvFusionArguments:
 
     advfusion_paths: Optional[str] = field(
         default=None,
-        metadata={"help": ("',' separated list of paths of adapters")},
+        metadata={"help": "',' separated list of paths of adapters"},
     )
 
     advfusion_target: Optional[str] = field(
         default=None,
-        metadata={"help": ("target language or task")},
+        metadata={"help": "target language or task"},
     )
 
 
@@ -371,34 +400,36 @@ class MiscArguments:
 
     generation_batch_size: Optional[int] = field(
         default=8,
-        metadata={"help": ("Generation batch size")},
+        metadata={"help": "Generation batch size"},
     )
 
     humaneval_batch_size: Optional[int] = field(
         default=8,
-        metadata={"help": ("Humaneval batch size")},
+        metadata={"help": "Humaneval batch size"},
     )
 
     humaneval_prompt_mode: Optional[str] = field(
         default="",
-        metadata={"help": ("Humaneval prompt mode")},
+        metadata={"help": "Humaneval prompt mode"},
     )
 
     rename_all_results: Optional[bool] = field(
         default=False,
-        metadata={"help": ("Rename existing all results instead of overwriting")},
+        metadata={"help": "Rename existing all results instead of overwriting"},
     )
 
 
 def parse_arguments():
-    parser = HfArgumentParser((
-        ModelArguments,
-        DataTrainingArguments,
-        Seq2SeqTrainingArguments,
-        AdapterArguments,
-        AdvFusionArguments,
-        MiscArguments,
-    ))
+    parser = HfArgumentParser(
+        (
+            ModelArguments,
+            DataTrainingArguments,
+            Seq2SeqTrainingArguments,
+            AdapterArguments,
+            AdvFusionArguments,
+            MiscArguments,
+        )
+    )
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         (
             model_args,
@@ -426,4 +457,11 @@ def parse_arguments():
 
     advfusion_args.advadp_path_list = advadp_path_list
 
-    return model_args, data_args, training_args, adapter_args, advfusion_args, misc_args
+    return (
+        model_args,
+        data_args,
+        training_args,
+        adapter_args,
+        advfusion_args,
+        misc_args,
+    )

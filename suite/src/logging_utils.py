@@ -1,14 +1,16 @@
 import logging
 import sys
+
 import transformers
 import datasets
 
 logger = logging.getLogger(__name__)
 
+
 def setup_logging(logger, get_process_log_level):
     # Setup logging
     logging.basicConfig(
-            format="=> %(asctime)s - %(levelname)s: %(message)s",
+        format="=> %(asctime)s - %(levelname)s: %(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
         handlers=[logging.StreamHandler(sys.stdout)],
     )

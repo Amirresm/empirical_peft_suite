@@ -3,7 +3,7 @@ import os
 import argparse
 from typing import Dict
 import tqdm
-from text_utils import DatasetInstances, split_column, join_columns
+from text_utils import DatasetInstances, join_columns
 
 
 def scan_dir(dir: str):
@@ -33,11 +33,16 @@ def scan_dir(dir: str):
                     ds_instance = (
                         DatasetInstances.SPP
                         if "spp" in dataset_name
-                        else DatasetInstances.MULTIPLT
-                        if "multiplt" in dataset_name
-                        else DatasetInstances.CSN
-                        if "csn" in dataset_name or "rsum" in dataset_name
-                        else None
+                        else (
+                            DatasetInstances.MULTIPLT
+                            if "multiplt" in dataset_name
+                            else (
+                                DatasetInstances.CSN
+                                if "csn" in dataset_name
+                                or "rsum" in dataset_name
+                                else None
+                            )
+                        )
                     )
                     print(f"Processing {ds_instance} in {config_path}")
                     do_the_work(config_path, ds_instance)
@@ -46,7 +51,11 @@ def scan_dir(dir: str):
 
 
 def process_buffer_dict(index, buffer_dict: Dict, ds_instance):
-    if not buffer_dict["input"] or not buffer_dict["gold"] or not buffer_dict["pred"]:
+    if (
+        not buffer_dict["input"]
+        or not buffer_dict["gold"]
+        or not buffer_dict["pred"]
+    ):
         raise ValueError(f"Buffer dict {index} is missing keys:\n{buffer_dict}")
 
     prompt = buffer_dict["input"]
@@ -124,7 +133,9 @@ def read_generations_from_file(
                 else:
                     processed += 1
                     # save buffer to file
-                    text = process_buffer_dict(processed, buffer_dict, ds_instance)
+                    text = process_buffer_dict(
+                        processed, buffer_dict, ds_instance
+                    )
                     out_file.write(text)
                     processed_limit -= 1
                     cursor = None

@@ -1,10 +1,6 @@
 import os
 
 from adapters import AutoAdapterModel
-
-from constants import MULTILINGUAL_TOKENIZERS
-from src.logging_utils import logger
-
 import torch
 from transformers import (
     AutoConfig,
@@ -15,6 +11,9 @@ from transformers import (
     MBartTokenizerFast,
     MBartTokenizer,
 )
+
+from constants import MULTILINGUAL_TOKENIZERS
+from src.logging_utils import logger
 
 
 def get_training_corpus(raw_datasets, cols, step):
@@ -28,8 +27,6 @@ def init_config(config_name, model_name_or_path, cache_dir=None):
     config = AutoConfig.from_pretrained(
         (config_name if config_name else model_name_or_path),
         cache_dir=cache_dir,
-        # revision=model_args.model_revision,
-        # use_auth_token=True if model_args.use_auth_token else None,
     )
     return config
 
@@ -48,8 +45,6 @@ def init_tokenizer(
         ),
         cache_dir=cache_dir,
         use_fast=use_fast_tokenizer,
-        # revision=model_revision,
-        # use_auth_token=True if use_auth_token else None,
     )
 
     return tokenizer
@@ -74,7 +69,7 @@ def init_model(
     adapter_config,
     quantization_mode=None,
     is_decoder_only=False,
-    ):
+):
     bnb_config = None
     model_dtype = None
     if quantization_mode == "4bit":
@@ -96,7 +91,6 @@ def init_model(
         )
 
     ModelClass = AutoModelForSeq2SeqLM
-    # TODO: uncomment
     if is_decoder_only:
         ModelClass = AutoModelForCausalLM
 
@@ -104,8 +98,6 @@ def init_model(
         model_name_or_path,
         config=model_config,
         cache_dir=cache_dir,
-        # revision=model_revision,
-        # use_auth_token=True if use_auth_token else None,
         quantization_config=bnb_config,
         # device_map="auto" if is_decoder_only else None,
         device_map="auto",
@@ -138,18 +130,17 @@ def ensure_decoder_start_token(model, tokenizer, target_lang):
         tokenizer, (MBartTokenizer, MBartTokenizerFast)
     ):
         if isinstance(tokenizer, MBartTokenizer):
-            model.config.decoder_start_token_id = tokenizer.lang_code_to_id[target_lang]
-        else:
-            model.config.decoder_start_token_id = tokenizer.convert_tokens_to_ids(
+            model.config.decoder_start_token_id = tokenizer.lang_code_to_id[
                 target_lang
+            ]
+        else:
+            model.config.decoder_start_token_id = (
+                tokenizer.convert_tokens_to_ids(target_lang)
             )
 
     if model.config.decoder_start_token_id is None:
-        # raise ValueError(
-        #     "Make sure that `config.decoder_start_token_id` is correctly defined"
         # )
         logger.warning("No decoder_start_token_id found in config")
-        # model.config.decoder_start_token_id = model.config.eos_token_id
 
 
 def ensure_embedding_size(model, tokenizer, max_source_length):
@@ -173,7 +164,9 @@ def ensure_embedding_size(model, tokenizer, max_source_length):
         model.resize_token_embeddings(len(tokenizer))
 
 
-def ensure_multilingual_tokenizer(model, tokenizer, target_lang, forced_bos_token=None):
+def ensure_multilingual_tokenizer(
+    model, tokenizer, target_lang, forced_bos_token=None
+):
     if isinstance(tokenizer, tuple(MULTILINGUAL_TOKENIZERS)):
         assert (
             target_lang is not None

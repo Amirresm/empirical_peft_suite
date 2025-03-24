@@ -1,5 +1,6 @@
 import shutil
 import os
+
 import evaluate
 import torch
 from adapters import (
@@ -15,6 +16,11 @@ from transformers import (
     set_seed,
 )
 
+from constants import (
+    COMPLETION_COL,
+    PROMPT_COL,
+    DatasetInstances,
+)
 from src.adapter_utils import (
     init_ah_adapter,
     init_ah_advfusion,
@@ -26,11 +32,6 @@ from src.advf_utils import (
     zero_freeze_adapter,
 )
 from src.arg_utils import parse_arguments
-from constants import (
-    COMPLETION_COL,
-    PROMPT_COL,
-    DatasetInstances,
-)
 from src.dataset_utils import (
     get_dataset_metadata,
     group_dataset,
@@ -69,6 +70,7 @@ from src.logging_utils import logger, setup_logging
 from src.peft_utils import init_and_load_peft_adapter, init_peft_adapter
 from src.train_utils import handle_metrics
 
+# CodeBLEU is calculated after the generation
 has_codebleu = False
 # try:
 #     from codebleu import calc_codebleu
@@ -216,7 +218,6 @@ def main():
                     )
                     advfusion_args.target_adapter_path = target_adapter_path
                     advfusion_args.target_adapter_name = target_adapter_name
-                    # advfusion_args.fusion_name = fusion_name
 
                 case _:
                     adapter_name = init_ah_adapter(
@@ -232,7 +233,6 @@ def main():
                             model=model,
                             set_active=True,
                         )
-            # logger.info(f"Active heads: {model.active_head()}")
             logger.info(f"Adapter Summary:\n{model.adapter_summary()}")
         else:
             if model_args.preload_adapter:
@@ -255,8 +255,6 @@ def main():
                 model.get_model_status
             ):
                 logger.info(f"Model Status:\n{model.get_model_status()}")
-            # if hasattr(model, "get_layer_status") and callable(model.get_layer_status):
-            #     logger.info(f"Layer Status:\n{model.get_layer_status()}")
 
     if is_decoder_only:
         ensure_decoder_only_padding_token(model=model, tokenizer=tokenizer)
@@ -280,14 +278,6 @@ def main():
         text_column=data_args.text_column,
         summary_column=data_args.summary_column,
     )
-
-    # Preprocessing the datasets.
-    # filter_dataset(
-    #     raw_datasets,
-    #     text_column=text_column,
-    #     summary_column=summary_column,
-    #     preprocessing_num_workers=1,
-    # )
 
     ensure_multilingual_tokenizer(
         model=model,
@@ -327,7 +317,6 @@ def main():
         train_dataset, max_train_samples = process_dataset(
             raw_datasets=raw_datasets,
             max_sample_count=max_train_samples,
-            column_names=column_names,
             split="train",
             tokenizer=tokenizer,
             text_column=text_column,
@@ -367,7 +356,6 @@ def main():
         eval_dataset, max_eval_samples = process_dataset(
             raw_datasets=raw_datasets,
             max_sample_count=max_eval_samples,
-            column_names=column_names,
             split="validation",
             tokenizer=tokenizer,
             text_column=text_column,
@@ -406,7 +394,6 @@ def main():
         predict_dataset, max_predict_samples = process_dataset(
             raw_datasets=raw_datasets,
             max_sample_count=max_predict_samples,
-            column_names=column_names,
             split="test",
             tokenizer=tokenizer,
             text_column=text_column,
@@ -448,10 +435,6 @@ def main():
     )
     data_collator = (
         default_data_collator
-        # DataCollatorForLanguageModeling(
-        #     tokenizer,
-        #     mlm=False,
-        # )
         if is_decoder_only
         else DataCollatorForSeq2Seq(
             tokenizer,
@@ -480,8 +463,6 @@ def main():
     # Initialize our Trainer
     trainer: Trainer | None = None
 
-    # use_sft = False
-    # sft_trainer: SFTTrainer | None = None
     if training_args.do_train or training_args.do_eval:
         if adapter_args.train_adapter and adapter_args.use_adapterhub:
             trainer_class = (
@@ -541,9 +522,6 @@ def main():
         torch.cuda.reset_peak_memory_stats()
         timer = CudaTimer()
         timer.start()
-        # if sft_trainer is not None:
-        #     train_result = sft_trainer.train(resume_from_checkpoint=checkpoint)
-        # else:
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
 
         if adapter_args.adapter_config == "advfusion":
@@ -575,7 +553,6 @@ def main():
             )
 
         if not adapter_args.use_adapterhub:
-            # model.save_pretrained(training_args.output_dir)
             trainer.save_model()
 
         handle_metrics(

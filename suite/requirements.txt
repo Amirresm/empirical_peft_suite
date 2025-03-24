@@ -13,4 +13,3 @@ bitsandbytes==0.43.3
 tensorboardX==2.6.2.2
 trl==0.9.6
 peft==0.12.0
-# -e ./lib/codeeval/human_eval

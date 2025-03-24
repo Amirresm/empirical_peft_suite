@@ -25,20 +25,3 @@ for round in $(seq 1 $count); do
 	} >>"$2"
 	nvidia-smi >>"$2"
 done
-
-# sleep "$delay1"
-# echo "Memcheck > First1 check: $(date)"
-# # mkdir "$2" -p
-# echo "1: Seconds ${delay1}" > "$2"
-# echo "1: Time $(date)" >> "$2"
-# nvidia-smi >> "$2"
-
-# sleep "$delay2"
-# echo "Memcheck > Second2 check: $(date)"
-# { echo "2: Seconds ${delay2}"; echo "2: Time $(date)"; } >> "$2"
-# nvidia-smi >> "$2"
-
-# sleep "$delay3"
-# echo "Memcheck > Third3 check: $(date)"
-# { echo "3: Seconds ${delay3}"; echo "3: Time $(date)"; } >> "$2"
-# nvidia-smi >> "$2"

@@ -1,7 +1,6 @@
 from itertools import chain
 
 from datasets import DatasetDict, load_dataset
-from datasets.combine import DatasetType
 from huggingface_hub.constants import typing
 
 from constants import (
@@ -64,8 +63,6 @@ def load_raw_datasets(
         raw_datasets = load_dataset(
             dataset_name,
             dataset_config_name,
-            # cache_dir=model_args.cache_dir,
-            # token=True if model_args.use_auth_token else None,
         )
         ds_type = DatasetTypes.UNKNOWN
         ds_instance = DatasetInstances.UNKNOWN
@@ -74,7 +71,9 @@ def load_raw_datasets(
         if train_file is not None:
             data_files["train"] = train_file
             extension = train_file.split(".")[-1]
-        if validation_file is not None and not validation_file.startswith("SPLIT"):
+        if validation_file is not None and not validation_file.startswith(
+            "SPLIT"
+        ):
             data_files["validation"] = validation_file
             extension = validation_file.split(".")[-1]
         if test_file is not None and not test_file.startswith("SPLIT"):
@@ -86,11 +85,11 @@ def load_raw_datasets(
         raw_datasets = load_dataset(
             extension,
             data_files=data_files,
-            # cache_dir=model_args.cache_dir,
-            # token=True if model_args.use_auth_token else None,
         )
 
-        ds_type, ds_instance = detect_type([train_file, validation_file, test_file])
+        ds_type, ds_instance = detect_type(
+            [train_file, validation_file, test_file]
+        )
 
         if isinstance(raw_datasets, DatasetDict):
             if (
@@ -100,27 +99,34 @@ def load_raw_datasets(
             ):
                 split = float(validation_file.split("SPLIT")[-1])
                 if split > 0:
-                    raw_datasets["validation"] = raw_datasets["train"].train_test_split(
-                        test_size=split, seed=seed
-                    )["test"]
-                    raw_datasets["train"] = raw_datasets["train"].train_test_split(
-                        test_size=split, seed=seed
-                    )["train"]
+                    raw_datasets["validation"] = raw_datasets[
+                        "train"
+                    ].train_test_split(test_size=split, seed=seed)["test"]
+                    raw_datasets["train"] = raw_datasets[
+                        "train"
+                    ].train_test_split(test_size=split, seed=seed)["train"]
 
-            if test_file and "train" in raw_datasets and test_file.startswith("SPLIT"):
+            if (
+                test_file
+                and "train" in raw_datasets
+                and test_file.startswith("SPLIT")
+            ):
                 split = float(test_file.split("SPLIT")[-1])
                 if split > 0:
-                    raw_datasets["test"] = raw_datasets["train"].train_test_split(
-                        test_size=split, seed=seed
-                    )["test"]
-                    raw_datasets["train"] = raw_datasets["train"].train_test_split(
-                        test_size=split, seed=seed
-                    )["train"]
+                    raw_datasets["test"] = raw_datasets[
+                        "train"
+                    ].train_test_split(test_size=split, seed=seed)["test"]
+                    raw_datasets["train"] = raw_datasets[
+                        "train"
+                    ].train_test_split(test_size=split, seed=seed)["train"]
 
     if isinstance(raw_datasets, DatasetDict):
         logger.error("dataset type is unexpected")
 
-    if ds_type == DatasetTypes.UNKNOWN or ds_instance == DatasetInstances.UNKNOWN:
+    if (
+        ds_type == DatasetTypes.UNKNOWN
+        or ds_instance == DatasetInstances.UNKNOWN
+    ):
         raise ValueError(
             "Dataset type is unknown. Please implement 'detect_type' and 'split_column' functions"
         )
@@ -144,8 +150,6 @@ def load_additional_raw_dataset(
     raw_datasets = load_dataset(
         extension,
         data_files=data_files,
-        # cache_dir=model_args.cache_dir,
-        # token=True if model_args.use_auth_token else None,
     )
 
     ds_type, ds_instance = detect_type([ds_files[0]])
@@ -153,7 +157,10 @@ def load_additional_raw_dataset(
     if isinstance(raw_datasets, DatasetDict):
         logger.error("dataset type is unexpected")
 
-    if ds_type == DatasetTypes.UNKNOWN or ds_instance == DatasetInstances.UNKNOWN:
+    if (
+        ds_type == DatasetTypes.UNKNOWN
+        or ds_instance == DatasetInstances.UNKNOWN
+    ):
         raise ValueError(
             "Dataset type is unknown. Please implement 'detect_type' and 'split_column' functions"
         )
@@ -186,7 +193,9 @@ def get_dataset_metadata(
     dataset_columns = summarization_name_mapping.get(dataset_name, None)
     if text_column is None:
         text_column = (
-            dataset_columns[0] if dataset_columns is not None else column_names[0]
+            dataset_columns[0]
+            if dataset_columns is not None
+            else column_names[0]
         )
     else:
         text_column = text_column
@@ -196,14 +205,12 @@ def get_dataset_metadata(
             )
     if summary_column is None:
         summary_column = (
-            dataset_columns[1] if dataset_columns is not None else column_names[1]
+            dataset_columns[1]
+            if dataset_columns is not None
+            else column_names[1]
         )
     else:
         summary_column = summary_column
-        # if summary_column not in column_names:
-        #     raise ValueError(
-        #         f"--summary_column' value '{summary_column}' needs to be one of: {', '.join(column_names)}"
-        #     )
 
     return column_names, text_column, summary_column
 
@@ -217,7 +224,8 @@ def filter_dataset(
     length_before = len(dataset)
     logger.info("Filtering dataset for None records.")
     dataset = dataset.filter(
-        lambda x: x[text_column] and (summary_column == "NONE" or x[summary_column]),
+        lambda x: x[text_column]
+        and (summary_column == "NONE" or x[summary_column]),
         num_proc=preprocessing_num_workers,
     )
 
@@ -241,7 +249,9 @@ def get_column_preprocessor(
     def column_preprocessor(examples):
         inputs, targets = [], []
         for i in range(len(examples[text_column])):
-            if (ds_type == DatasetTypes.ONECOL and examples[text_column][i]) or (
+            if (
+                ds_type == DatasetTypes.ONECOL and examples[text_column][i]
+            ) or (
                 ds_type == DatasetTypes.TWOCOL
                 and examples[text_column][i]
                 and examples[summary_column][i]
@@ -250,7 +260,9 @@ def get_column_preprocessor(
                     input = examples[text_column][i]
                     if is_text_tokenized:
                         input = " ".join(input)
-                    input, target = split_column(examples[text_column][i], ds_instance)
+                    input, target = split_column(
+                        examples[text_column][i], ds_instance
+                    )
                 else:
                     input = examples[text_column][i]
                     target = examples[summary_column][i]
@@ -322,7 +334,10 @@ def get_tokenize_preprocessor(
         # padding in the loss.
         if padding == "max_length" and ignore_pad_token_for_loss:
             labels["input_ids"] = [
-                [(char if char != tokenizer.pad_token_id else -100) for char in label]
+                [
+                    (char if char != tokenizer.pad_token_id else -100)
+                    for char in label
+                ]
                 for label in labels["input_ids"]
             ]
 
@@ -349,7 +364,9 @@ def get_encoder_decoder_preprocessor(
         inputs, targets = [], []
         for i in range(len(examples[text_column])):
             if examples[text_column][i] and (
-                is_gen_job or summary_column == "NONE" or examples[summary_column][i]
+                is_gen_job
+                or summary_column == "NONE"
+                or examples[summary_column][i]
             ):
                 if is_gen_job or summary_column == "NONE":
                     # Assuming dataset is spp
@@ -386,7 +403,10 @@ def get_encoder_decoder_preprocessor(
         # padding in the loss.
         if padding == "max_length" and ignore_pad_token_for_loss:
             labels["input_ids"] = [
-                [(char if char != tokenizer.pad_token_id else -100) for char in label]
+                [
+                    (char if char != tokenizer.pad_token_id else -100)
+                    for char in label
+                ]
                 for label in labels["input_ids"]
             ]
 
@@ -410,7 +430,9 @@ def get_decoder_only_preprocessor(
         samples = []
         for i in range(len(examples[text_column])):
             if examples[text_column][i] and (
-                is_gen_job or summary_column == "NONE" or examples[summary_column][i]
+                is_gen_job
+                or summary_column == "NONE"
+                or examples[summary_column][i]
             ):
                 input = examples[text_column][i]
                 target = (
@@ -445,28 +467,25 @@ def get_decoder_only_preprocessor(
 
 def get_group_text_preprocessor(
     block_size: int,
-    # padding,
-    # ignore_pad_token_for_loss=False,
 ):
     def group_text_preprocessor(examples):
         # Concatenate all texts.
-        concatenated_examples = {k: list(chain(*examples[k])) for k in examples.keys()}
+        concatenated_examples = {
+            k: list(chain(*examples[k])) for k in examples.keys()
+        }
         total_length = len(concatenated_examples[list(examples.keys())[0]])
         # We drop the small remainder, and if the total_length < block_size  we exclude this batch and return an empty dict.
         # We could add padding if the model supported it instead of this drop, you can customize this part to your needs.
         total_length = (total_length // block_size) * block_size
         # Split by chunks of max_len.
         result = {
-            k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
+            k: [
+                t[i : i + block_size]
+                for i in range(0, total_length, block_size)
+            ]
             for k, t in concatenated_examples.items()
         }
         labels = result["input_ids"].copy()
-
-        # if padding == "max_length" and ignore_pad_token_for_loss:
-        #     labels = [
-        #         [(id if id != tokenizer.pad_token_id else -100) for id in label]
-        #         for label in labels
-        #     ]
 
         result["labels"] = labels
         return result
@@ -477,7 +496,6 @@ def get_group_text_preprocessor(
 def process_dataset(
     raw_datasets,
     max_sample_count,
-    column_names,
     split,
     main_process_first,
     tokenizer,
@@ -534,7 +552,9 @@ def process_dataset(
 
         logger.info(f"{split}_dataset before:\n{dataset}")
         remove_columns = [
-            col for col in dataset.column_names if col not in ["prompt", "completion"]
+            col
+            for col in dataset.column_names
+            if col not in ["prompt", "completion"]
         ]
         dataset = dataset.map(
             column_preprocessor,
@@ -567,7 +587,6 @@ def group_dataset(
     overwrite_cache=False,
     preprocessing_num_workers=None,
 ):
-    # if data_args.block_size is None:
     block_size = tokenizer.model_max_length
     if block_size > model.config.max_position_embeddings:
         logger.warning(
@@ -581,13 +600,6 @@ def group_dataset(
             )
         else:
             block_size = max_source_length
-    # else:
-    #     if data_args.block_size > tokenizer.model_max_length:
-    #         logger.warning(
-    #             f"The block_size passed ({data_args.block_size}) is larger than the maximum length for the model "
-    #             f"({tokenizer.model_max_length}). Using block_size={tokenizer.model_max_length}."
-    #         )
-    #     block_size = min(data_args.block_size, tokenizer.model_max_length)
 
     group_texts = get_group_text_preprocessor(block_size)
     with main_process_first(desc="grouping texts together"):

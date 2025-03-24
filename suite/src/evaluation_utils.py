@@ -1,9 +1,8 @@
-from lib.bleu2.calc_bleu2 import calculate_bleu2
-from logging_utils import logger
-
 import numpy as np
 import nltk
 
+from lib.bleu2.calc_bleu2 import calculate_bleu2
+from src.logging_utils import logger
 from src.text_utils import clean_whitespaces_generations, split_column
 
 
@@ -50,9 +49,13 @@ def get_compute_metrics(
             labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
 
         inspect_preds = tokenizer.batch_decode(preds, skip_special_tokens=False)
-        inspect_labels = tokenizer.batch_decode(labels, skip_special_tokens=False)
+        inspect_labels = tokenizer.batch_decode(
+            labels, skip_special_tokens=False
+        )
         decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
-        decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
+        decoded_labels = tokenizer.batch_decode(
+            labels, skip_special_tokens=True
+        )
 
         logger.info(
             f"\nCompute_metrics Preds example ({preds.shape}):\n{clean_whitespaces_generations(inspect_preds[0])}\n"
@@ -104,14 +107,15 @@ def calc_all_metrics(
 
     bleu2, _ = calculate_bleu2(preds, labels, smooth=True)
     bleu2 = {
-        f"BLEU2_{k}": str(v) if isinstance(v, list) else v for k, v in bleu2.items()
+        f"BLEU2_{k}": str(v) if isinstance(v, list) else v
+        for k, v in bleu2.items()
     }
     result = {**result, **bleu2}
     result_bleu = {}
     if metric_path is not None:
-        if any([len(pred) > 0 for pred in preds]) and any([
-            len(label) > 0 for label in labels
-        ]):
+        if any([len(pred) > 0 for pred in preds]) and any(
+            [len(label) > 0 for label in labels]
+        ):
             result_bleu = metric_bleu.compute(
                 predictions=preds,
                 references=labels,

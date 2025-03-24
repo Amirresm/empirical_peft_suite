@@ -1,9 +1,9 @@
 import json
-import gzip
 import os
-from accelerate.utils import tqdm
+
 import numpy as np
 import torch
+from accelerate.utils import tqdm
 from transformers.trainer_utils import Dict
 
 from constants import COMPLETION_COL, PROMPT_COL, DatasetInstances
@@ -73,7 +73,9 @@ def generation_from_predict_encoder_decoder(
     outputs = []
     token_counts = []
     for i in range(len(preds)):
-        token_counts.append((raw_inputs_token_count[i], preds_token_count[i], -1))
+        token_counts.append(
+            (raw_inputs_token_count[i], preds_token_count[i], -1)
+        )
         outputs.append(join_columns(raw_inputs[i], preds[i], ds_instance))
 
     pairs = [
@@ -137,7 +139,6 @@ def generation_decoder_only(
         targets.append(target)
         examples.append(example)
 
-    raw_outputs = []
     outputs = []
     preds = []
     token_counts = []
@@ -167,9 +168,6 @@ def generation_decoder_only(
             batch_outputs = model.generate(
                 **prompts_encoded,
                 max_new_tokens=max_new_tokens,
-                # do_sample=True,
-                # top_k=50,
-                # top_p=0.95,
                 eos_token_id=tokenizer.eos_token_id,
                 pad_token_id=tokenizer.pad_token_id,
             )
@@ -199,9 +197,6 @@ def generation_decoder_only(
                     f"{index + i}===\nInput:\n{prompts[index + i]}\nPred:\n{btch[0]}\nGold:\n{targets[index + i]}"
                 )
 
-    # preds, outputs = process_decoder_only_generation(
-    #     prompts, raw_outputs, ds_instance=ds_instance, is_decoder_only=is_decoder_only
-    # )
     pairs = [
         f"{index + 1}=========\n\
 ->Example:\n{example}\n\
@@ -226,7 +221,11 @@ def generation_decoder_only(
 
     output_prediction_file = os.path.join(
         save_path,
-        f"{save_path_prefix}_generations.txt" if save_path_prefix is not None else "generated_generations.txt",
+        (
+            f"{save_path_prefix}_generations.txt"
+            if save_path_prefix is not None
+            else "generated_generations.txt"
+        ),
     )
     ensure_path_exists(save_path)
     with open(output_prediction_file, "w") as writer:
@@ -252,7 +251,9 @@ def generation_decoder_only(
     return results
 
 
-def process_decoder_only_generation(prompts, outputs, ds_instance, is_decoder_only):
+def process_decoder_only_generation(
+    prompts, outputs, ds_instance, is_decoder_only
+):
     preds = []
     outs = []
     if is_decoder_only:
@@ -276,11 +277,11 @@ def process_decoder_only_generation(prompts, outputs, ds_instance, is_decoder_on
     return preds, outs
 
 
-def get_generate_batch_completion(
-    max_new_tokens, is_decoder_only, prompter, join_prompt_and_completion
-):
+def get_generate_batch_completion(prompter, join_prompt_and_completion):
     @torch.inference_mode()
-    def generate_batch_completion(model, tokenizer, prompt, do_padding) -> list[str]:
+    def generate_batch_completion(
+        model, tokenizer, prompt, do_padding
+    ) -> list[str]:
         input_batch = [prompter(p) for p in prompt]
         if do_padding:
             inputs = tokenizer(
@@ -291,17 +292,13 @@ def get_generate_batch_completion(
                 truncation=True,
             ).to(model.device)
         else:
-            inputs = tokenizer(input_batch, return_tensors="pt").to(model.device)
+            inputs = tokenizer(input_batch, return_tensors="pt").to(
+                model.device
+            )
 
         generated_ids = model.generate(
             **inputs,
-            # use_cache=True,
             max_new_tokens=200,
-            # temperature=1.0,
-            # top_k=50,
-            # top_p=0.95,
-            # do_sample=True,
-            # repetition_penalty=1.1,
             eos_token_id=tokenizer.eos_token_id,
             pad_token_id=tokenizer.pad_token_id,
         )
@@ -311,7 +308,6 @@ def get_generate_batch_completion(
             skip_special_tokens=True,
         )
 
-        # res = [filter_code(fix_indents(extract_code(completion))) for completion in batch_completions]
         res = [fix_indents(completion) for completion in batch_completions]
         res = batch_completions
         if join_prompt_and_completion:
@@ -327,10 +323,14 @@ def get_generate_batch_completion(
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 HUMAN_EVAL = os.path.join(ROOT, "lib", "codeeval", "data", "HumanEval.jsonl.gz")
-HUMAN_EVAL_R = os.path.join(ROOT, "lib", "codeeval", "data", "humaneval-r.jsonl")
+HUMAN_EVAL_R = os.path.join(
+    ROOT, "lib", "codeeval", "data", "humaneval-r.jsonl"
+)
 
 
-def read_humaneval_r_problems(evalset_file: str = HUMAN_EVAL_R) -> Dict[str, Dict]:
+def read_humaneval_r_problems(
+    evalset_file: str = HUMAN_EVAL_R,
+) -> Dict[str, Dict]:
     return {task["name"]: task for task in stream_jsonl(evalset_file)}
 
 
@@ -357,8 +357,6 @@ def run_humaneval(
         out_path = f"{out_path}/eval.jsonl"
         prompter = get_humaneval_prompter(prompt_mode)
         generate_batch_completion = get_generate_batch_completion(
-            is_decoder_only=is_decoder_only,
-            max_new_tokens=max_new_tokens,
             prompter=prompter,
             join_prompt_and_completion=not is_decoder_only
             and ds_instance != DatasetInstances.MULTIPLT,
@@ -383,8 +381,6 @@ def run_humaneval(
             generate_batch_completion,
             problems=problems,
             batch_size=batch_size,
-            # True,
-            # limit=10,
         )
 
         pairs = [
@@ -406,7 +402,9 @@ def run_humaneval(
         with open(output_prediction_file, "w") as writer:
             writer.write("\n".join(pairs))
 
-        logger.info(f"{len(pairs)} generations saved to {output_prediction_file}")
+        logger.info(
+            f"{len(pairs)} generations saved to {output_prediction_file}"
+        )
 
         if ds_instance == DatasetInstances.MULTIPLT:
             logger.info(ds_instance)
@@ -415,15 +413,14 @@ def run_humaneval(
                 task_id = sample["task_id"]
                 problem = problems[task_id]
                 if is_decoder_only:
-                    _, completion = split_column(sample["completion"], ds_instance)
+                    _, completion = split_column(
+                        sample["completion"], ds_instance
+                    )
                 else:
                     completion = sample["completion"]
                 out_dict = {
                     "name": problem["name"],
                     "language": problem["language"],
-                    # "temperature": temperature,
-                    # "top_p": top_p,
-                    # "max_tokens": max_tokens,
                     "prompt": problem["prompt"],
                     "tests": problem["tests"],
                     "completions": [completion],
@@ -439,8 +436,6 @@ def run_humaneval(
                 )
                 ensure_path_exists(output_problems_dir)
                 out_dict = json.dumps(out_dict)
-                # with gzip.open(output_problems_file, "wt") as f:
-                #     f.write()
                 with open(output_problems_file, "w") as writer:
                     writer.write(out_dict)
 
@@ -450,9 +445,6 @@ def run_humaneval(
         if ds_instance == DatasetInstances.SPP and calc_passk:
             results, details = evaluate_functional_correctness(
                 sample_file=out_path,
-                # k=[1, 10, 100],
-                # n_workers=4,
-                # timeout=3.0,
             )
             pairs = [
                 f"{index + 1}=========\n\
@@ -475,13 +467,14 @@ def run_humaneval(
             with open(output_prediction_file, "w") as writer:
                 writer.write("\n".join(pairs))
 
-            logger.info(f"{len(pairs)} generations saved to {output_prediction_file}")
+            logger.info(
+                f"{len(pairs)} generations saved to {output_prediction_file}"
+            )
             results["pass@1_count"] = results["pass@1"] * 164
 
             # add humaneval prefix to keys in results
             res = {}
             for key in results.keys():
-                # results[f"humaneval_{num_samples_per_task}_{key}"] = results[key]
                 res[f"humaneval_{key}"] = results[key]
 
             results = res

@@ -80,7 +80,8 @@ def scan_dirtree(dir: str, filter_dataset_name: str) -> list[ConfigMeta]:
                         if (
                             config_meta is not None
                             and config_meta.remark in ["norm"]
-                            and config_meta.model in ["codellama-7b", "codet5-base"]
+                            and config_meta.model
+                            in ["codellama-7b", "codet5-base"]
                             and config_meta.peft in ["lora", "compacter"]
                         ):
                             # batch.append(config_meta)
@@ -146,7 +147,9 @@ def stream_jsonl(filename: str) -> Iterable[Dict]:
         with open(filename, "rb") as gzfp:
             with gzip.open(gzfp, "rt") as fp:
                 for line in fp:
-                    if isinstance(line, str) and any(not x.isspace() for x in line):
+                    if isinstance(line, str) and any(
+                        not x.isspace() for x in line
+                    ):
                         yield json.loads(line)
     else:
         with open(filename, "r") as fp:
@@ -188,7 +191,9 @@ def map_model_name(model_name):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", type=str, required=True)
+    parser.add_argument("--input", type=str, required=True, help="Path to the input directory")
+    parser.add_argument("--r-path", type=str, required=True, help="Path to the R dataset")
+    parser.add_argument("--python-path", type=str, required=True, help="Path to the Python dataset")
     parser.add_argument("--recursive", type=bool, default=False, required=False)
     args = parser.parse_args()
 
@@ -198,8 +203,8 @@ def main():
 
     target_datasets = ["csn-python", "rsum-combined"]
     original_datasets = {
-        "rsum-combined": "/home/amirreza/projects/ai/data/rsum/Rcombine/test.jsonl",
-        "csn-python": "/home/amirreza/projects/ai/data/CodeSearchNet/python/test.jsonl",
+        "rsum-combined": args.r_path,
+        "csn-python": args.python_path,
     }
 
     for target_dataset in target_datasets:
@@ -233,9 +238,11 @@ def main():
                         {
                             **sample,
                             "original_target": "".join(original["docstring"]),
-                            "original_prompt": "".join(original["code_tokens"])
-                            if is_R
-                            else original["code"],
+                            "original_prompt": (
+                                "".join(original["code_tokens"])
+                                if is_R
+                                else original["code"]
+                            ),
                             "index": i,
                         }
                         for i, (sample, original) in enumerate(
@@ -271,7 +278,9 @@ def main():
             with open(source_file_name, "r") as source_file:
                 generations = read_generations(source_file)
                 for random_s in random_sample:
-                    data_per_model[name].append(generations[random_s["index"]]["pred"])
+                    data_per_model[name].append(
+                        generations[random_s["index"]]["pred"]
+                    )
 
         rows = []
         fields = ["index", "original_prompt", "original_target"]
@@ -285,9 +294,9 @@ def main():
 
             original_target = s["original_target"].strip()
             row = [
-                    index,
-                    original_prompt,
-                    original_target,
+                index,
+                original_prompt,
+                original_target,
             ]
             for model in data_per_model.values():
                 row.append(model[i].strip())

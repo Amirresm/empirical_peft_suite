@@ -19,19 +19,29 @@ def get_module_zeroer(device, adapter_name):
 
     return set_module_zero
 
+
 def get_module_freezer(adapter_name):
     def set_module_zero(_, module):
         if hasattr(module, "adapters") and adapter_name in module.adapters:
-            module.adapters[adapter_name].adapter_down[0].weight.requires_grad = False
-            module.adapters[adapter_name].adapter_down[0].bias.requires_grad = False
-            module.adapters[adapter_name].adapter_up.weight.requires_grad = False
+            module.adapters[adapter_name].adapter_down[
+                0
+            ].weight.requires_grad = False
+            module.adapters[adapter_name].adapter_down[
+                0
+            ].bias.requires_grad = False
+            module.adapters[adapter_name].adapter_up.weight.requires_grad = (
+                False
+            )
             module.adapters[adapter_name].adapter_up.bias.requires_grad = False
+
     return set_module_zero
+
 
 def zero_freeze_adapter(model, adapter_name, model_dtype):
     set_module_zero = get_module_zeroer(model.device, adapter_name)
     model.apply_to_adapter_layers(set_module_zero)
     model.adapter_to(adapter_name, device=model.device, dtype=model_dtype)
+
 
 def freeze_adapter(model, adapter_name):
     freeze_module = get_module_freezer(adapter_name)

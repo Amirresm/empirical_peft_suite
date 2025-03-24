@@ -1,7 +1,9 @@
 import os
+
+import adapters
+
 from src.general_utits import ensure_path_exists
 from src.logging_utils import logger
-import adapters
 from src.advf_utils import freeze_adapter
 
 
@@ -9,18 +11,19 @@ def get_ah_config(adapter_config):
     match adapter_config:
         case "compacter":
             return adapters.CompacterConfig(
-                # phm_dim=64,
-                # phm_rank=32,
-                # mh_adapter=True,
-                # output_adapter=True,
+                phm_dim=4,
+                phm_rank=1,
             )
 
         case "ia3":
-            return adapters.IA3Config()
+            return adapters.IA3Config(
+                r=8,
+                alpha=16,
+            )
 
         case "lora":
             return adapters.LoRAConfig(
-                # r=16,
+                r=8,
                 alpha=16,
                 dropout=0.05,
                 attn_matrices=["q", "k", "v"],

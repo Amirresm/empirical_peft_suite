@@ -4,10 +4,8 @@ import json
 import datetime
 
 from filelock import FileLock
+
 import nltk
-
-from src.logging_utils import logger
-
 import adapters
 import accelerate
 import torch
@@ -17,6 +15,8 @@ import bitsandbytes
 from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version, is_offline_mode
 from transformers.utils.versions import require_version
+
+from src.logging_utils import logger
 
 
 def check_dependencies():
@@ -46,13 +46,16 @@ def check_nltk_data():
             )
         with FileLock(".lock") as _:
             nltk.download("punkt", quiet=True)
+            nltk.download("punkt_tab", quiet=True)
 
 
 def ensure_path_exists(path):
     pathlib.Path(path).mkdir(parents=True, exist_ok=True)
 
 
-def handle_last_checkpoint(output_dir, overwrite_output_dir, resume_from_checkpoint):
+def handle_last_checkpoint(
+    output_dir, overwrite_output_dir, resume_from_checkpoint
+):
     last_checkpoint = None
     if os.path.isdir(output_dir) and not overwrite_output_dir:
         last_checkpoint = get_last_checkpoint(output_dir)
@@ -88,6 +91,7 @@ class CudaTimer:
             return self.timer.elapsed_time(self.end_timer) / (1000)
         return None
 
+
 def _secs2timedelta(secs):
     """
     convert seconds to hh:mm:ss.msec, msecs rounded to 2 decimals
@@ -95,6 +99,7 @@ def _secs2timedelta(secs):
 
     msec = int(abs(secs - int(secs)) * 100)
     return f"{datetime.timedelta(seconds=int(secs))}.{msec:02d}"
+
 
 def metrics_format(metrics):
     """
@@ -130,6 +135,7 @@ def log_metrics(split, metrics):
     for key in sorted(metrics_formatted.keys()):
         print(f"  {key: <{k_width}} = {metrics_formatted[key]:>{v_width}}")
 
+
 def save_metrics(split, metrics, output_dir, combined=True):
     output_path = os.path.join(output_dir, f"{split}_results.json")
     with open(output_path, "w") as f:
@@ -146,4 +152,3 @@ def save_metrics(split, metrics, output_dir, combined=True):
         all_metrics.update(metrics)
         with open(output_dir, "w") as f:
             json.dump(all_metrics, f, indent=4, sort_keys=True)
-

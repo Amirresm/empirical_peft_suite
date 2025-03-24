@@ -1,7 +1,9 @@
 from src.general_utits import log_metrics, save_metrics
 
 
-def handle_metrics(prefix, metrics, output_dir, sample_count = None, trainer = None):
+def handle_metrics(
+    prefix, metrics, output_dir, sample_count=None, trainer=None
+):
     if sample_count is not None:
         metrics[f"{prefix}_samples"] = sample_count
     if trainer is not None:
@@ -10,4 +12,3 @@ def handle_metrics(prefix, metrics, output_dir, sample_count = None, trainer = N
     else:
         log_metrics(prefix, metrics)
         save_metrics(prefix, metrics, output_dir)
-

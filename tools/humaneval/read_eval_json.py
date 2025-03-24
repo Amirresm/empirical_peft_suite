@@ -14,8 +14,6 @@ def main():
     for json_str in json_list:
         result = json.loads(json_str)
         samples.append(result)
-        # print(f"result: {result}")
-        # print(isinstance(result, dict))
 
     passed_ids = []
     passed_results_counter = Counter()

@@ -137,7 +137,6 @@ class ConfigMeta:
         self._dirname = f"{self.remark}_{self.job}_{self.model}_{self.dataset}_{self.peft_lib}_{self.peft}"
 
     def get_path(self, base_path: str):
-        # /home/amirreza/projects/ai/outputs/peftsuite_results/gen/codellama-7b/spp_30k/infer_gen_codellama-7b_spp_30k_none_none
         return os.path.join(
             base_path, self.job, self.model, self.dataset, self._dirname
         )
