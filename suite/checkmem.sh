@@ -2,14 +2,14 @@
 
 delay="$1"
 if [[ -z "$delay" ]]; then
-	delay=180
+	delay=60
 fi
 
 delay1="$1"
 delay2="$1"
 delay3="$1"
 
-count=8
+count=5
 
 echo "Memcheck > Memory checker started at: $(date)"
 
