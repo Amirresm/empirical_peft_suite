@@ -48,6 +48,7 @@ You can use the `jsonl` version of your own dataset of choosing with this code b
 - **spp_30k**: [Synthetic Python Problems(SPP) Dataset](https://huggingface.co/datasets/wuyetao/spp) | Python code generation
 - **csn**: [CodeSearchNet](https://github.com/github/CodeSearchNet?tab=readme-ov-file#quickstart) | Python, Go, Java, JavaScript, PHP and Ruby for code summarization
 - **MultiPL-T R**: R split of [MultiPL-T Fine-Tuning Datasets](https://huggingface.co/datasets/nuprl/MultiPL-T) | R code generation
+- **R Code Summarization**: [Do Current Language Models Support Code Intelligence for R Programming Language?](https://zenodo.org/records/13871742) | R code summarization
 
 Additionally, we use the following for code generation evaluation
 - **HumanEval**: [human-eval](https://github.com/openai/human-eval) | Python code generation evaluation 
