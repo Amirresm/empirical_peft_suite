@@ -1,0 +1,214 @@
+Unexpected dataset: multiplt-r, skipping...
+Unexpected dataset: spp_30k, skipping...
+Unexpected dataset: sppu_30k, skipping...
+Unexpected dataset: multiplt-r, skipping...
+Unexpected dataset: spp_30k, skipping...
+Unexpected dataset: multiplt-r, skipping...
+Unexpected dataset: spp_30k, skipping...
+Unexpected dataset: multiplt-r, skipping...
+Unexpected dataset: spp_30k, skipping...
+Unexpected dataset: csn-php, skipping...
+Unexpected dataset: csn-java, skipping...
+Unexpected dataset: csn-ruby, skipping...
+Unexpected dataset: csn-javascript, skipping...
+Unexpected dataset: csn-go, skipping...
+Unexpected dataset: rsum-combined, skipping...
+Unexpected dataset: csn-php, skipping...
+Unexpected dataset: csn-java, skipping...
+Unexpected dataset: csn-ruby, skipping...
+Unexpected dataset: csn-javascript, skipping...
+Unexpected dataset: csn-go, skipping...
+Unexpected dataset: rsum-combined, skipping...
+Unexpected dataset: csn-php, skipping...
+Unexpected dataset: csn-java, skipping...
+Unexpected dataset: csn-ruby, skipping...
+Unexpected dataset: csn-javascript, skipping...
+Unexpected dataset: csn-go, skipping...
+Unexpected dataset: rsum-combined, skipping...
+Unexpected dataset: csn-php, skipping...
+Unexpected dataset: csn-java, skipping...
+Unexpected dataset: csn-ruby, skipping...
+Unexpected dataset: csn-javascript, skipping...
+Unexpected dataset: csn-go, skipping...
+Unexpected dataset: rsum-combined, skipping...
+  0%|          | 0/4 [00:00<?, ?it/s]Processing sum_csn-python_codellama-7b:   0%|          | 0/4 [00:00<?, ?it/s]
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:   0%|          | 0/1000 [00:00<?, ?it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:   1%|          | 6/1000 [00:00<00:16, 59.15it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:   1%|▏         | 13/1000 [00:00<00:15, 64.28it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:   2%|▏         | 20/1000 [00:00<00:15, 63.65it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:   3%|▎         | 27/1000 [00:00<00:15, 64.57it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:   3%|▎         | 34/1000 [00:00<00:14, 64.93it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:   4%|▍         | 42/1000 [00:00<00:14, 65.84it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:   5%|▍         | 49/1000 [00:00<00:14, 65.70it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:   6%|▌         | 56/1000 [00:00<00:14, 64.68it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:   6%|▋         | 63/1000 [00:00<00:14, 64.05it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:   7%|▋         | 70/1000 [00:01<00:14, 64.36it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:   8%|▊         | 77/1000 [00:01<00:14, 65.07it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:   8%|▊         | 84/1000 [00:01<00:13, 65.54it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:   9%|▉         | 91/1000 [00:01<00:13, 65.35it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  10%|▉         | 98/1000 [00:01<00:13, 65.39it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  10%|█         | 105/1000 [00:01<00:13, 66.24it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  11%|█         | 112/1000 [00:01<00:13, 65.05it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  12%|█▏        | 119/1000 [00:01<00:13, 65.43it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  13%|█▎        | 126/1000 [00:01<00:13, 65.99it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  13%|█▎        | 133/1000 [00:02<00:13, 66.12it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  14%|█▍        | 140/1000 [00:02<00:12, 66.97it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  15%|█▍        | 147/1000 [00:02<00:12, 65.66it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  15%|█▌        | 154/1000 [00:02<00:12, 65.49it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  16%|█▌        | 161/1000 [00:02<00:13, 64.02it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  17%|█▋        | 168/1000 [00:02<00:12, 65.44it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  18%|█▊        | 175/1000 [00:02<00:12, 64.51it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  18%|█▊        | 182/1000 [00:02<00:12, 64.91it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  19%|█▉        | 189/1000 [00:02<00:12, 64.47it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  20%|█▉        | 196/1000 [00:03<00:12, 65.29it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  20%|██        | 203/1000 [00:03<00:12, 65.88it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  21%|██        | 210/1000 [00:03<00:12, 65.31it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  22%|██▏       | 218/1000 [00:03<00:11, 67.41it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  23%|██▎       | 226/1000 [00:03<00:11, 68.32it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  23%|██▎       | 233/1000 [00:03<00:11, 66.41it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  24%|██▍       | 240/1000 [00:03<00:11, 65.44it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  25%|██▍       | 247/1000 [00:03<00:11, 65.71it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  25%|██▌       | 254/1000 [00:03<00:11, 64.07it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  26%|██▌       | 262/1000 [00:04<00:11, 66.19it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  27%|██▋       | 269/1000 [00:04<00:11, 64.95it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  28%|██▊       | 276/1000 [00:04<00:11, 64.57it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  28%|██▊       | 283/1000 [00:04<00:11, 64.75it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  29%|██▉       | 290/1000 [00:04<00:11, 63.44it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  30%|██▉       | 297/1000 [00:04<00:10, 64.31it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  30%|███       | 304/1000 [00:04<00:10, 65.45it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  31%|███       | 311/1000 [00:04<00:10, 66.02it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  32%|███▏      | 318/1000 [00:04<00:10, 65.09it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  32%|███▎      | 325/1000 [00:04<00:10, 64.45it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  33%|███▎      | 332/1000 [00:05<00:10, 64.37it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  34%|███▍      | 339/1000 [00:05<00:10, 62.25it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  35%|███▍      | 346/1000 [00:05<00:10, 62.64it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  35%|███▌      | 353/1000 [00:05<00:10, 62.85it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  36%|███▌      | 360/1000 [00:05<00:10, 61.67it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  37%|███▋      | 367/1000 [00:05<00:10, 61.73it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  37%|███▋      | 374/1000 [00:05<00:10, 59.83it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  38%|███▊      | 381/1000 [00:05<00:10, 59.88it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  39%|███▉      | 388/1000 [00:06<00:10, 59.09it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  40%|███▉      | 395/1000 [00:06<00:10, 60.17it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  40%|████      | 402/1000 [00:06<00:09, 60.96it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  41%|████      | 409/1000 [00:06<00:09, 60.63it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  42%|████▏     | 416/1000 [00:06<00:09, 60.07it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  42%|████▏     | 423/1000 [00:06<00:09, 61.95it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  43%|████▎     | 430/1000 [00:06<00:09, 63.15it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  44%|████▎     | 437/1000 [00:06<00:09, 61.69it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  44%|████▍     | 444/1000 [00:06<00:08, 62.01it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  45%|████▌     | 451/1000 [00:07<00:08, 61.12it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  46%|████▌     | 458/1000 [00:07<00:08, 61.80it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  46%|████▋     | 465/1000 [00:07<00:08, 60.39it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  47%|████▋     | 472/1000 [00:07<00:08, 61.41it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  48%|████▊     | 479/1000 [00:07<00:08, 59.76it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  49%|████▊     | 486/1000 [00:07<00:08, 60.82it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  49%|████▉     | 493/1000 [00:07<00:08, 60.70it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  50%|█████     | 500/1000 [00:07<00:08, 61.92it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  51%|█████     | 507/1000 [00:07<00:07, 61.71it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  51%|█████▏    | 514/1000 [00:08<00:07, 61.39it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  52%|█████▏    | 521/1000 [00:08<00:07, 60.24it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  53%|█████▎    | 528/1000 [00:08<00:07, 62.01it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  54%|█████▎    | 535/1000 [00:08<00:07, 62.38it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  54%|█████▍    | 542/1000 [00:08<00:07, 61.87it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  55%|█████▍    | 549/1000 [00:08<00:07, 60.86it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  56%|█████▌    | 556/1000 [00:08<00:07, 58.79it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  56%|█████▋    | 563/1000 [00:08<00:07, 59.95it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  57%|█████▋    | 570/1000 [00:09<00:07, 61.16it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  58%|█████▊    | 577/1000 [00:09<00:06, 61.32it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  58%|█████▊    | 584/1000 [00:09<00:06, 61.56it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  59%|█████▉    | 591/1000 [00:09<00:06, 61.90it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  60%|█████▉    | 598/1000 [00:09<00:06, 63.04it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  60%|██████    | 605/1000 [00:09<00:06, 62.84it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  61%|██████    | 612/1000 [00:09<00:06, 62.80it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  62%|██████▏   | 620/1000 [00:09<00:05, 65.71it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  63%|██████▎   | 627/1000 [00:09<00:05, 64.35it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  63%|██████▎   | 634/1000 [00:10<00:05, 63.96it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  64%|██████▍   | 641/1000 [00:10<00:05, 63.96it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  65%|██████▍   | 648/1000 [00:10<00:05, 63.53it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  66%|██████▌   | 655/1000 [00:10<00:05, 62.42it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  66%|██████▌   | 662/1000 [00:10<00:05, 62.23it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  67%|██████▋   | 669/1000 [00:10<00:05, 62.25it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  68%|██████▊   | 676/1000 [00:10<00:05, 62.11it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  68%|██████▊   | 683/1000 [00:10<00:05, 61.73it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  69%|██████▉   | 690/1000 [00:10<00:05, 59.68it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  70%|██████▉   | 697/1000 [00:11<00:05, 60.31it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  70%|███████   | 704/1000 [00:11<00:04, 61.22it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  71%|███████   | 711/1000 [00:11<00:04, 60.84it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  72%|███████▏  | 718/1000 [00:11<00:04, 60.92it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  72%|███████▎  | 725/1000 [00:11<00:04, 62.34it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  73%|███████▎  | 732/1000 [00:11<00:04, 61.77it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  74%|███████▍  | 739/1000 [00:11<00:04, 61.43it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  75%|███████▍  | 746/1000 [00:11<00:04, 60.42it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  75%|███████▌  | 753/1000 [00:11<00:04, 59.86it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  76%|███████▌  | 760/1000 [00:12<00:03, 62.23it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  77%|███████▋  | 767/1000 [00:12<00:03, 62.05it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  77%|███████▋  | 774/1000 [00:12<00:03, 63.63it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  78%|███████▊  | 781/1000 [00:12<00:03, 62.97it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  79%|███████▉  | 788/1000 [00:12<00:03, 62.60it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  80%|███████▉  | 795/1000 [00:12<00:03, 62.62it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  80%|████████  | 802/1000 [00:12<00:03, 59.95it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  81%|████████  | 809/1000 [00:12<00:03, 59.21it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  82%|████████▏ | 816/1000 [00:12<00:03, 60.21it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  82%|████████▏ | 823/1000 [00:13<00:02, 59.57it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  83%|████████▎ | 829/1000 [00:13<00:02, 59.06it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  84%|████████▎ | 836/1000 [00:13<00:02, 60.76it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  84%|████████▍ | 843/1000 [00:13<00:02, 61.30it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  85%|████████▌ | 850/1000 [00:13<00:02, 62.13it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  86%|████████▌ | 857/1000 [00:13<00:02, 61.91it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  86%|████████▋ | 864/1000 [00:13<00:02, 63.63it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  87%|████████▋ | 871/1000 [00:13<00:02, 62.71it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  88%|████████▊ | 878/1000 [00:13<00:01, 64.16it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  88%|████████▊ | 885/1000 [00:14<00:01, 62.63it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  89%|████████▉ | 892/1000 [00:14<00:01, 63.26it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  90%|████████▉ | 899/1000 [00:14<00:01, 62.36it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  91%|█████████ | 906/1000 [00:14<00:01, 60.76it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  91%|█████████▏| 913/1000 [00:14<00:01, 60.60it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  92%|█████████▏| 920/1000 [00:14<00:01, 61.79it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  93%|█████████▎| 927/1000 [00:14<00:01, 62.55it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  93%|█████████▎| 934/1000 [00:14<00:01, 62.90it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  94%|█████████▍| 941/1000 [00:14<00:00, 61.25it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  95%|█████████▍| 948/1000 [00:15<00:00, 62.24it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  96%|█████████▌| 955/1000 [00:15<00:00, 60.14it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  96%|█████████▌| 962/1000 [00:15<00:00, 61.12it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  97%|█████████▋| 969/1000 [00:15<00:00, 61.94it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  98%|█████████▊| 976/1000 [00:15<00:00, 60.68it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  98%|█████████▊| 983/1000 [00:15<00:00, 60.04it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000:  99%|█████████▉| 990/1000 [00:15<00:00, 61.29it/s][A
+norm_sum_codellama-7b_csn-python_pl_lora | shuffle 1000x100=100000: 100%|█████████▉| 997/1000 [00:15<00:00, 62.04it/s][A
+                                                                                                                      [A
+infer_sum_codellama-7b_csn-python_none_none | shuffle 1000x100=100000:   0%|          | 0/1000 [00:00<?, ?it/s][A
+                                                                                                               [AError: 
+j: 13521 len(preds): 13032
+Error: 
+j: 13434 len(preds): 13032
+Error: 
+j: 13198 len(preds): 13032
+Error: 
+j: 13577 len(preds): 13032
+Error: 
+j: 14381 len(preds): 13032
+Error: 
+j: 14697 len(preds): 13032
+Error: 
+j: 14050 len(preds): 13032
+Error: 
+j: 14227 len(preds): 13032
+Error: 
+j: 13991 len(preds): 13032
+Error: 
+j: 14364 len(preds): 13032
+Error: 
+j: 14258 len(preds): 13032
+Error: 
+j: 14399 len(preds): 13032
+Traceback (most recent call last):
+  File "/UBC-O/amirreza/project/peft_suite/tools/stat_test/stat_test.py", line 275, in <module>
+    main()
+  File "/UBC-O/amirreza/project/peft_suite/tools/stat_test/stat_test.py", line 201, in main
+    results = calc_metrics(
+              ^^^^^^^^^^^^^
+  File "/UBC-O/amirreza/project/peft_suite/tools/stat_test/stat_test.py", line 101, in calc_metrics
+    batch_preds = [preds[j] for j in sample_indices]
+                   ~~~~~^^^
+IndexError: list index out of range
+Processing sum_csn-python_codellama-7b:   0%|          | 0/4 [00:17<?, ?it/s]

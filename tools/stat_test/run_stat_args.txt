@@ -1,0 +1,6 @@
+--input ../../../results/peftsuite_results --recursive true --target_datasets "spp_30k,multiplt-r" > log_spp_30k_multiplt-r.csv 2>&1; echo 'job spp_30k,multiplt-r done'
+--input ../../../results/peftsuite_results --recursive true --target_datasets "csn-python" > log_csn-python.csv 2>&1; echo 'job csn-python done'
+--input ../../../results/peftsuite_results --recursive true --target_datasets "csn-php" > log_csn-php.csv 2>&1; echo 'job csn-php done'
+--input ../../../results/peftsuite_results --recursive true --target_datasets "csn-go,csn-java" > log_csn-go_java.csv 2>&1; echo 'job csn-go,csn-java done'
+--input ../../../results/peftsuite_results --recursive true --target_datasets "csn-ruby,csn-javascript" > log_csn-ruby_javascript.csv 2>&1; echo 'job csn-ruby,csn-javascript done'
+--input ../../../results/peftsuite_results --recursive true --target_datasets "rsum-combined" > log_rsum-combined.csv 2>&1; echo 'job rsum-combined done'

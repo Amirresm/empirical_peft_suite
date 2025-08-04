@@ -1,0 +1,17 @@
+group,config,task,model,data,peft,metric,p_value,significant
+sum_csn-php_codellama-7b,infer-none-none,sum,codellama-7b,csn-php,none,bleu,-1,baseline
+sum_csn-php_codellama-7b,norm-ah-compacter,sum,codellama-7b,csn-php,compacter,bleu,0.0,yes
+sum_csn-php_codellama-7b,norm-pl-lora,sum,codellama-7b,csn-php,lora,bleu,0.0,yes
+sum_csn-php_codellama-7b,norm-pl-ia3,sum,codellama-7b,csn-php,ia3,bleu,0.0,yes
+sum_csn-php_llama2-7b-hf,infer-none-none,sum,llama2-7b-hf,csn-php,none,bleu,-1,baseline
+sum_csn-php_llama2-7b-hf,norm-ah-compacter,sum,llama2-7b-hf,csn-php,compacter,bleu,0.0,yes
+sum_csn-php_llama2-7b-hf,norm-pl-lora,sum,llama2-7b-hf,csn-php,lora,bleu,0.0,yes
+sum_csn-php_llama2-7b-hf,norm-pl-ia3,sum,llama2-7b-hf,csn-php,ia3,bleu,0.0,yes
+sum_csn-php_codet5-base,full-none-none,sum,codet5-base,csn-php,none,bleu,-1,baseline
+sum_csn-php_codet5-base,norm-ah-compacter,sum,codet5-base,csn-php,compacter,bleu,0.0,yes
+sum_csn-php_codet5-base,norm-pl-lora,sum,codet5-base,csn-php,lora,bleu,0.0,yes
+sum_csn-php_codet5-base,norm-pl-ia3,sum,codet5-base,csn-php,ia3,bleu,0.0,yes
+sum_csn-php_t5-base,full-none-none,sum,t5-base,csn-php,none,bleu,-1,baseline
+sum_csn-php_t5-base,norm-ah-compacter,sum,t5-base,csn-php,compacter,bleu,9.474383908414142e-133,yes
+sum_csn-php_t5-base,norm-pl-lora,sum,t5-base,csn-php,lora,bleu,3.525085282841436e-33,yes
+sum_csn-php_t5-base,norm-pl-ia3,sum,t5-base,csn-php,ia3,bleu,2.2896694842618307e-139,yes
