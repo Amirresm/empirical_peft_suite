@@ -40,6 +40,7 @@ This repository also includes custom tools we used in various settings which are
 - **Migrate**: results migration
 - **Present**: results transformation (to CSV, surveys, etc...)
 - **Robustness**: dataset modification using GPT-4o, used in robustness experiments
+- **Statistical Tests**: statistical tests
 
 Note that these tools mostly depend on the opinionated directory structures defined before.
 
